@@ -17,7 +17,8 @@ const el_port    = document.getElementById("port");
 const el_connect = document.getElementById("connect");
 const el_highlight = document.getElementById("highlight");
 const el_highlight_type = document.getElementById("highlight_type");
-const el_highlight_color = document.getElementById("highlight_color");
+const el_highlight_fg = document.getElementById("highlight_fg");
+const el_highlight_bg = document.getElementById("highlight_bg");
 
 // tab bar elements
 const el_tabbar   = document.getElementById("tabbar");
@@ -79,14 +80,16 @@ let cfg = {
 
 // Settings pushed from the extension host (defaults for host/port and filter)
 let settingsDefaults = null;
-let settingsDefaultHighlightColor = '#ffff00';
+let settingsDefaultHighlightForeground = '#000000';
+let settingsDefaultHighlightBackground = '#ffff00';
 let settingsHighlights = [];
 let settingsHighlightsById = {};
 
 // If the extension injected settings into the page at load time, apply them immediately.
 if(window.__uscopeDefaults) {
     settingsDefaults = window.__uscopeDefaults.defaults || null;
-    if(window.__uscopeDefaults.defaultHighlightColor) settingsDefaultHighlightColor = window.__uscopeDefaults.defaultHighlightColor;
+    if(window.__uscopeDefaults.defaultHighlightForeground) settingsDefaultHighlightForeground = window.__uscopeDefaults.defaultHighlightForeground;
+    if(window.__uscopeDefaults.defaultHighlightBackground) settingsDefaultHighlightBackground = window.__uscopeDefaults.defaultHighlightBackground;
     // load highlight definitions
     if(Array.isArray(window.__uscopeDefaults.highlights)) {
         settingsHighlights = window.__uscopeDefaults.highlights.slice();
@@ -139,7 +142,9 @@ if(window.__uscopeDefaults && Array.isArray(window.__uscopeDefaults.savedTabs) &
     const saved = window.__uscopeDefaults.savedTabs.slice();
     for(let i=0;i<saved.length;i++) {
         const s = saved[i];
-        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s), highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor, highlight_refs: s.filterIds || s.highlightIds || s.filterIds || [] });
+        const fg = s.highlightForeground || s.highlightFg || s.highlightForeground || settingsDefaultHighlightForeground;
+        const bg = s.highlightBackground || s.highlightBg || s.highlightColor || settingsDefaultHighlightBackground;
+        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s), highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_fg: fg, highlight_bg: bg, highlight_refs: s.filterIds || s.highlightIds || s.filterIds || [] });
     }
 } else {
     create_new_tab();
@@ -177,7 +182,8 @@ function create_new_tab(spec) {
         // highlight settings for this tab
         highlight_text: spec && (spec.highlight_text !== undefined) ? spec.highlight_text : "",
         highlight_type: spec && (spec.highlight_type !== undefined) ? spec.highlight_type : (spec && spec.highlightType ? spec.highlightType : 'simple'),
-        highlight_color: spec && spec.highlight_color ? spec.highlight_color : '#ffff00',
+        highlight_fg: spec && spec.highlight_fg ? spec.highlight_fg : '#000000',
+        highlight_bg: spec && spec.highlight_bg ? spec.highlight_bg : '#ffff00',
         highlight_regex: null,
         // references to named highlight rules
         highlight_refs: spec && spec.highlight_refs ? (Array.isArray(spec.highlight_refs) ? spec.highlight_refs.slice() : [spec.highlight_refs]) : [],
@@ -283,16 +289,16 @@ function resolveTabHighlights(tab) {
     const list = [];
     // include global always highlights
     for(const h of settingsHighlights) {
-        if(h && h.always) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', color: h.color || h.highlightColor || settingsDefaultHighlightColor, id: h.id || null });
+        if(h && h.always) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', foreground: h.foreground || h.fg || (h.color ? settingsDefaultHighlightForeground : settingsDefaultHighlightForeground), background: h.background || h.bg || h.color || settingsDefaultHighlightBackground, id: h.id || null });
     }
     // include referenced highlights by id
     for(const id of (tab.highlight_refs || [])) {
         const h = settingsHighlightsById[id];
-        if(h) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', color: h.color || h.highlightColor || settingsDefaultHighlightColor, id: h.id });
+        if(h) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', foreground: h.foreground || h.fg || (h.color ? settingsDefaultHighlightForeground : settingsDefaultHighlightForeground), background: h.background || h.bg || h.color || settingsDefaultHighlightBackground, id: h.id });
     }
     // include per-tab inline highlight if present
     if(tab.highlight_text && tab.highlight_text !== '') {
-        list.push({ filter: tab.highlight_text, type: tab.highlight_type || 'simple', color: tab.highlight_color || settingsDefaultHighlightColor, id: null });
+        list.push({ filter: tab.highlight_text, type: tab.highlight_type || 'simple', foreground: tab.highlight_fg || settingsDefaultHighlightForeground, background: tab.highlight_bg || settingsDefaultHighlightBackground, id: null });
     }
     // compile regex placeholders on the rule objects
     for(const r of list) {
@@ -300,6 +306,9 @@ function resolveTabHighlights(tab) {
         if(r.type === 'regex') {
             try { r._regex = new RegExp(r.filter, r.filter === r.filter.toLowerCase() ? 'i' : ''); } catch(e) { r._regex = null; }
         }
+        // ensure foreground/background defaults
+        if(!r.foreground) r.foreground = settingsDefaultHighlightForeground;
+        if(!r.background) r.background = settingsDefaultHighlightBackground;
     }
     tab.resolved_highlights = list;
 }
@@ -379,7 +388,8 @@ function applySavedTabs(savedArray) {
                 // update highlight refs and per-tab highlight
                 exists.highlight_text = s.highlight || s.highlightText || exists.highlight_text;
                 exists.highlight_type = s.highlightType || s.highlight_type || exists.highlight_type;
-                exists.highlight_color = s.highlightColor || settingsDefaultHighlightColor || exists.highlight_color;
+                exists.highlight_fg = s.highlightForeground || s.highlightFg || settingsDefaultHighlightForeground || exists.highlight_fg;
+                exists.highlight_bg = s.highlightBackground || s.highlightBg || s.highlightColor || settingsDefaultHighlightBackground || exists.highlight_bg;
                 exists.highlight_refs = s.filterIds || s.highlightIds || exists.highlight_refs;
                 exists.highlight_regex = null;
                 resolveTabHighlights(exists);
@@ -387,7 +397,7 @@ function applySavedTabs(savedArray) {
                 if(exists.el_close) { try { exists.el.removeChild(exists.el_close); } catch {} exists.el_close = null; }
             } else {
                 // insert at the correct position based on order: insert before the i-th saved tab element or before +
-                create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key, highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor, highlight_refs: s.filterIds || s.highlightIds || [] });
+                create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key, highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_fg: s.highlightForeground || s.highlightFg || settingsDefaultHighlightForeground, highlight_bg: s.highlightBackground || s.highlightBg || s.highlightColor || settingsDefaultHighlightBackground, highlight_refs: s.filterIds || s.highlightIds || [] });
             }
         } else {
             // ensure it's marked saved
@@ -396,7 +406,8 @@ function applySavedTabs(savedArray) {
             // update highlight settings from saved config
             exists.highlight_text = s.highlight || s.highlightText || exists.highlight_text;
             exists.highlight_type = s.highlightType || s.highlight_type || exists.highlight_type;
-            exists.highlight_color = s.highlightColor || settingsDefaultHighlightColor || exists.highlight_color;
+            exists.highlight_fg = s.highlightForeground || s.highlightFg || settingsDefaultHighlightForeground || exists.highlight_fg;
+            exists.highlight_bg = s.highlightBackground || s.highlightBg || s.highlightColor || settingsDefaultHighlightBackground || exists.highlight_bg;
             exists.highlight_regex = null;
             // update highlight refs
             exists.highlight_refs = s.filterIds || s.highlightIds || exists.highlight_refs;
@@ -498,11 +509,15 @@ function applyHighlightToLine(line) {
         try {
             if(r.type === 'regex' && r._regex) {
                 const re = new RegExp(r._regex.source, 'g' + (ignore_case ? 'i' : ''));
-                out = out.replace(re, match => `<span style="background-color:${r.color}">${match}</span>`);
+                out = out.replace(re, match => {
+                    return `<span style="color:${r.foreground};background-color:${r.background}">${match}</span>`;
+                });
             } else {
                 const pat = r.filter.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
                 const re = new RegExp(pat, 'g' + (ignore_case ? 'i' : ''));
-                out = out.replace(re, match => `<span style="background-color:${r.color}">${match}</span>`);
+                out = out.replace(re, match => {
+                    return `<span style="color:${r.foreground};background-color:${r.background}">${match}</span>`;
+                });
             }
         } catch (e) {
             // ignore this rule on error
@@ -537,7 +552,8 @@ function switch_tab(tab_new) {
     // highlight inputs should reflect tab state
     if(typeof el_highlight !== 'undefined' && el_highlight) el_highlight.value = cfg.tab.highlight_text || '';
     if(typeof el_highlight_type !== 'undefined' && el_highlight_type) el_highlight_type.value = cfg.tab.highlight_type || 'simple';
-    if(typeof el_highlight_color !== 'undefined' && el_highlight_color) el_highlight_color.value = cfg.tab.highlight_color || settingsDefaultHighlightColor || '#ffff00';
+    if(typeof el_highlight_fg !== 'undefined' && el_highlight_fg) el_highlight_fg.value = cfg.tab.highlight_fg || settingsDefaultHighlightForeground || '#000000';
+    if(typeof el_highlight_bg !== 'undefined' && el_highlight_bg) el_highlight_bg.value = cfg.tab.highlight_bg || settingsDefaultHighlightBackground || '#ffff00';
 
     // different tab means a different filter
     change_filter();
@@ -855,7 +871,8 @@ if(el_save_tab) el_save_tab.addEventListener('click', ev => {
             filterType: t.filter_type || 'simple',
             highlight: t.highlight_text || '',
             highlightType: t.highlight_type || 'simple',
-            highlightColor: t.highlight_color || settingsDefaultHighlightColor,
+            highlightForeground: t.highlight_fg || settingsDefaultHighlightForeground,
+            highlightBackground: t.highlight_bg || settingsDefaultHighlightBackground,
             filterIds: t.highlight_refs || []
         }
     };
@@ -879,8 +896,13 @@ if(el_highlight_type) el_highlight_type.addEventListener('change', ev => {
     resolveTabHighlights(cfg.tab);
     output_redraw();
 });
-if(el_highlight_color) el_highlight_color.addEventListener('input', ev => {
-    cfg.tab.highlight_color = el_highlight_color.value;
+if(el_highlight_fg) el_highlight_fg.addEventListener('input', ev => {
+    cfg.tab.highlight_fg = el_highlight_fg.value;
+    resolveTabHighlights(cfg.tab);
+    output_redraw();
+});
+if(el_highlight_bg) el_highlight_bg.addEventListener('input', ev => {
+    cfg.tab.highlight_bg = el_highlight_bg.value;
     resolveTabHighlights(cfg.tab);
     output_redraw();
 });

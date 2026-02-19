@@ -33,17 +33,25 @@ Add the `uscope.savedTabs` array to your Workspace settings (Preferences → Set
 Example:
 
 ```json
-"uscope.savedTabs": [
-	{ "filter": "CH0", "name": "CH0." },
-	{ "filter": "CH1", "name": "CH1." },
-	{ "filter": "CH\\d+", "name": "CH*"}
-],
-"uscope.highlights": [
-	// A reusable highlight definition that can be applied to multiple tabs by id
-	{ "id": "red error lines", "filter": ".*error.*", "color": "#ff0000", "type": "regex", "always": true }
-]
+{
+	"uscope.savedTabs": [
+		{ "filter": "CH0", "name": "CH0." },
+		{ "filter": "CH1", "name": "CH1." },
+		{ "filter": "CH\\d+", "name": "CH*" }
+	],
+	"uscope.highlights": [
+		{
+			"id": "red error lines",
+			"filter": ".*error.*",
+			"type": "regex",
+			"foreground": "#ffffff",
+			"background": "#ff0000",
+			"always": true
+		}
+	]
+}
 
-You can also reference highlights from saved tabs by id instead of embedding the pattern directly:
+You can also reference highlights from saved tabs specifically, rather than using `always`.
 
 ```json
 "uscope.savedTabs": [
@@ -52,6 +60,13 @@ You can also reference highlights from saved tabs by id instead of embedding the
 	{ "filter": "CH\\d+", "name": "CH*", "filterIds": ["red error lines"] }
 ]
 ```
+
+And you can also define inline per tab highlights.
+
+```json
+"uscope.savedTabs": [
+    { "filter": "CH0", "name": "CH0.", "highlight": ".*error.*", "highlightType": "regex", "highlightForeground": "#ffffff", "highlightBackground": "#ff0000" }
+]
 ```
 
 Saved tabs show as left-most tabs in μScope and are not closable from the UI. 

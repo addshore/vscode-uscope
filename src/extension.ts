@@ -280,7 +280,8 @@ function view_recv(data: any) {
             };
             if(incoming.highlight !== undefined) entry.highlight = incoming.highlight;
             if(incoming.highlightType !== undefined) entry.highlightType = incoming.highlightType;
-            if(incoming.highlightColor !== undefined) entry.highlightColor = incoming.highlightColor;
+            if(incoming.highlightForeground !== undefined) entry.highlightForeground = incoming.highlightForeground;
+            if(incoming.highlightBackground !== undefined) entry.highlightBackground = incoming.highlightBackground;
             if(incoming.filterIds !== undefined) entry.filterIds = incoming.filterIds;
 
             if(ix >= 0) {
@@ -345,12 +346,13 @@ function view_update() {
             'openocdRttGdb': { host: conf.get('defaults.openocdRttGdb.host', '127.0.0.1'), port: conf.get('defaults.openocdRttGdb.port', 3333) },
             'openocdSwo': { host: conf.get('defaults.openocdSwo.host', '127.0.0.1'), port: conf.get('defaults.openocdSwo.port', 3344) }
         };
-        // default highlight color
-        const defaultHighlightColor = conf.get('defaults.highlightColor', 'yellow');
+        // default highlight foreground/background
+        const defaultHighlightForeground = conf.get('defaults.highlightForeground', '#000000');
+        const defaultHighlightBackground = conf.get('defaults.highlightBackground', '#ffff00');
         const filterDefault = conf.get('filter.defaultType', 'simple');
         const savedTabs = conf.get('savedTabs', []);
         const highlights = conf.get('highlights', []);
-        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, highlights: highlights, defaultHighlightColor: defaultHighlightColor })};</script>`;
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, highlights: highlights, defaultHighlightForeground: defaultHighlightForeground, defaultHighlightBackground: defaultHighlightBackground })};</script>`;
         html = html.replace("${uscope_settings}", settingsScript);
     } catch (e) {
         html = html.replace("${uscope_settings}", "");

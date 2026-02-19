@@ -26,7 +26,7 @@
         {
           "id": "uscope-con",
           "title": "uScope",
-          "icon": ""
+          "icon": "media/icon.png"
         }
       ]
     },
@@ -36,7 +36,8 @@
         {
           "type": "webview",
           "id": "uscope-view",
-          "name": "uScope"
+          "name": "uScope",
+          "icon": "media/icon.png"
         }
       ]
     }
@@ -121,10 +122,15 @@
           "description": "Default port for OpenOCD SWO"
         }
         ,
-        "uscope.defaults.highlightColor": {
+        "uscope.defaults.highlightForeground": {
+          "type": "string",
+          "default": "#000000",
+          "description": "Default highlight foreground color used when a per-tab color is not set"
+        },
+        "uscope.defaults.highlightBackground": {
           "type": "string",
           "default": "#ffff00",
-          "description": "Default highlight color used when a per-tab color is not set"
+          "description": "Default highlight background color used when a per-tab color is not set"
         }
         ,
         "uscope.savedTabs": {
@@ -137,10 +143,11 @@
               "name": { "type": "string", "description": "Optional display name for the tab" },
               "filter": { "type": "string", "description": "Filter string for the tab" },
               "filterType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
-              "highlight": { "type": "string", "description": "Optional highlight text/pattern for this tab" },
-              "highlightType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
-              "highlightColor": { "type": "string", "description": "CSS color for highlight (e.g. '#ffff00' or 'yellow')" }
-                  ,"filterIds": { "type": "array", "description": "Optional array of highlight ids to reference from 'uscope.highlights'", "items": { "type": "string" } }
+                  "highlight": { "type": "string", "description": "Optional highlight text/pattern for this tab" },
+                  "highlightType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
+                  "highlightForeground": { "type": "string", "description": "CSS color for highlight foreground (e.g. '#000000' or 'black')" },
+                  "highlightBackground": { "type": "string", "description": "CSS color for highlight background (e.g. '#ffff00' or 'yellow')" },
+                  "filterIds": { "type": "array", "description": "Optional array of highlight ids to reference from 'uscope.highlights'", "items": { "type": "string" } }
             }
           },
           "default": []
@@ -155,7 +162,8 @@
               "id": { "type": "string", "description": "Unique id for referencing this highlight from saved tabs" },
               "filter": { "type": "string", "description": "Pattern or text to match" },
               "type": { "type": "string", "enum": ["simple", "regex"], "default": "regex", "description": "How to interpret the filter" },
-              "color": { "type": "string", "description": "CSS color for matching text (e.g. '#ff0000')" },
+              "foreground": { "type": "string", "description": "CSS foreground color for matching text (e.g. '#000000')" },
+              "background": { "type": "string", "description": "CSS background color for matching text (e.g. '#ff0000')" },
               "always": { "type": "boolean", "description": "If true this highlight applies to all tabs", "default": false }
             }
           },
