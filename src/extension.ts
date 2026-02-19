@@ -26,6 +26,12 @@ let view: vscode.WebviewView;
 let socket: net.Socket | null;
 let proc: cp.ChildProcessWithoutNullStreams | null;
 let timer: NodeJS.Timer | null;
+let reconnectTimer: NodeJS.Timer | null = null;
+let reconnectAttempts = 0;
+let manualDisconnect = false;
+let lastHost: string | null = null;
+let lastPort: number | null = null;
+let lastHow: string | null = null;
 
 
 // called as soon as the 'uscope' panel becomes visible, which should be at launch
@@ -41,15 +47,29 @@ export function deactivate() {
 }
 
 // Create a the socket connection to the rtt server. 'how' is used to decide wether to create a TCP socket or a connection over gdb.
-function connect(host: string, port: number, how: string) {
+function connect(host: string, port: number, how: string, userInitiated: boolean = false) {
     // try to disconnect, if we are still connected
+    // clear manualDisconnect only when the user explicitly requests a new connection
+    if (userInitiated) {
+        manualDisconnect = false;
+        // clear any pending reconnect attempts and disconnect existing connections
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        reconnectAttempts = 0;
+    }
     disconnect();
+
+    // store for possible reconnect attempts
+    lastHost = host;
+    lastPort = port;
+    lastHow = how;
 
     // Receive RTT over GDB,
     // RTT normally only works with SEGGER J-Link devices
     // But we can read memory via gdb, so we implement the RTT protocol and read the data out
     if(how === "st-gdb" || how === "oc-gdb") {
         proc = cp.spawn("gdb", ['-q', '-nx', "--interpreter=mi"]);
+        // successful start of a gdb process counts as a successful connection
+        reconnectAttempts = 0;
         view_send({ host: host, port: port, type: "connect" }); 
         proc.stdout.on('error', ev => console.log('error', ev));
 
@@ -102,6 +122,17 @@ function connect(host: string, port: number, how: string) {
             }
         }); 
 
+        proc.on('exit', (code, signal) => {
+            // GDB process died, try to reconnect unless user requested disconnect
+            view_send({ type: 'error', value: `gdb exited (${code || signal})` });
+            scheduleReconnect();
+        });
+
+        proc.on('error', (err) => {
+            view_send({ type: 'error', value: err.message || String(err) });
+            scheduleReconnect();
+        });
+
         timer = setInterval(() => {
             // This should never happen, but needed to make typescript happy
             // If the process is terminated we also stop the timer.
@@ -129,20 +160,49 @@ function connect(host: string, port: number, how: string) {
     } else {
         // everything else, that is not over gdb just uses a simple tcp socket
         socket = net.connect(port, host, () => { view_send({ host: host, port: port, type: "connect" }); });
+        // successful socket connection -> reset attempts
+        socket.on('connect', () => { reconnectAttempts = 0; });
 
         // forward all error messages to the webview
         socket.on('error', data => {
             view_send({ type: "error", value: data.message });
-
-            // but we don't want to receive 'close' anymore now. So just remove that listener.
-            // not perfect but this works.
-            socket?.removeAllListeners();
+            // schedule reconnect attempts
+            scheduleReconnect();
         });
 
         // also forward close event and the message data
-        socket.on('close', () => { view_send({ type: "close" }); });
+        socket.on('close', hadError => {
+            view_send({ type: "close" });
+            scheduleReconnect();
+        });
+
         socket.on('data', data => view_send({  type: "message", value: data.toString() }));
     }
+}
+
+function scheduleReconnect() {
+    // don't schedule if user explicitly disconnected
+    if (manualDisconnect) return;
+    // If a reconnect is already scheduled, don't schedule another (avoid double-increment)
+    if (reconnectTimer) return;
+
+    // increment attempt counter once per scheduled reconnect
+    reconnectAttempts++;
+
+    // first attempt immediate, subsequent attempts back off exponentially up to 1s
+    let delay = 0;
+    if (reconnectAttempts <= 1) delay = 0;
+    else delay = Math.min(1000, Math.pow(2, reconnectAttempts - 2) * 100);
+
+    view_send({ type: 'reconnect', attempt: reconnectAttempts, delay: delay });
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        // if user disconnected in the meantime, abort
+        if (manualDisconnect) return;
+        if (lastHost !== null && lastPort !== null && lastHow !== null) {
+            connect(lastHost, lastPort, lastHow);
+        }
+    }, delay);
 }
 
 // close the socket if possible.
@@ -179,7 +239,7 @@ function view_send(data: any) {
 function view_recv(data: any) {
     // (re)connect to the socket
     if(data.type === 'connect') {
-        connect(data.host, data.port, data.how);
+        connect(data.host, data.port, data.how, true);
     }
 
     // send input to the socket, data.value is always a single line with no '\n' at the end.
@@ -190,6 +250,10 @@ function view_recv(data: any) {
 
     // user wants to close the socket, so lets do that
     if(data.type === 'disconnect') {
+        // mark as manual disconnect so automatic reconnect attempts stop
+        manualDisconnect = true;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        reconnectAttempts = 0;
         disconnect();
     }
 

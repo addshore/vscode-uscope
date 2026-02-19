@@ -69,6 +69,8 @@ let cfg = {
 
     // list of all tabs, objects are the same as the tab object above
     tab_list: [],
+    // whether we are currently in a reconnect loop
+    reconnecting: false,
 };
 
 // lets create the first tab
@@ -289,18 +291,87 @@ function disconnect() {
 function on_connect() {
     el_connect.innerText = "Disconnect";
     cfg.connected = true;
+    cfg.reconnecting = false;
 }
 
 // We failed to connect to the socket
 function on_error() {
+    // If we are in a reconnect loop, keep that UI state instead of showing Failed
+    if (cfg.reconnecting) {
+        console.debug('[uScope] on_error ignored because reconnecting');
+        return;
+    }
+
     el_connect.innerText = "Failed, Retry?";
+    cfg.reconnecting = false;
 }
 
 // Connection was closed, the server went away or something
 function on_disconnect() {
+    // If a reconnect is scheduled/ongoing, keep the reconnect UI instead of flipping back to Connect
+    if (cfg.reconnecting) {
+        return;
+        cfg.connected = false; // still mark disconnected
+        return;
+    }
+
     el_connect.innerText = "Connect";
     cfg.connected = false;
+    cfg.reconnecting = false;
 }
+
+// Handle reconnect updates from the extension
+function on_reconnect(attempt, delay) {
+    cfg.connected = false;
+    // keep the button narrow: short text with attempt number
+    el_connect.innerText = `Reconnecting... ${attempt}`;
+    cfg.reconnecting = true;
+}
+
+// Unified incoming message handler from the extension
+window.addEventListener('message', event => {
+    const data = event.data;
+    if(!data || !data.type) return;
+
+    switch(data.type) {
+        case 'connect':
+            on_connect();
+            break;
+
+        case 'error':
+            on_error();
+            append_line("ERROR: " + (data.value || "") + "\n");
+            break;
+
+        case 'close':
+            on_disconnect();
+            append_line("[Connection closed]\n");
+            break;
+
+        case 'reconnect':
+            on_reconnect(data.attempt, data.delay);
+            break;
+        // debug messages removed
+
+        case 'message': {
+            // streaming message: may contain multiple lines; preserve incomplete tail in cfg.line_progress
+            const message = cfg.line_progress + (data.value || "");
+            const msg_lines = message.split("\n");
+            cfg.line_progress = msg_lines.pop();
+
+            for (let i = 0; i < msg_lines.length; i++) {
+                let line = msg_lines[i];
+                if(line === "") continue;
+                line += "\n";
+                append_line(line);
+            }
+
+            // scroll down to the new lines
+            update_scroll();
+            break;
+        }
+    }
+});
 
 // we changed the filter
 function change_filter() {
@@ -375,6 +446,16 @@ function send_input() {
 
 // Connect button
 el_connect.addEventListener("click", event => {
+    // If we are in a reconnect loop, clicking should cancel retries (manual disconnect)
+    if (cfg.reconnecting) {
+        cfg.reconnecting = false;
+        cfg.connected = false;
+        el_connect.innerText = "Connect";
+        // inform extension to stop retrying
+        msg_send({ type: 'disconnect' });
+        return;
+    }
+
     if(!cfg.connected) {
         connect();
     } else {
@@ -405,43 +486,7 @@ el_follow.addEventListener("click", event => {
     update_scroll();
 });
 
-// messages that are sent by extension.ts, contains connection information and the rtt messages.
-window.addEventListener('message', event => {
-    const data = event.data;
-
-    // socket state
-    if(data.type === 'connect') on_connect();
-    if(data.type === 'error')   on_error();
-    if(data.type === 'close')   on_disconnect();
-
-    // scoket message
-    if(data.type === 'message') {
-        const message = cfg.line_progress + data.value; // The json data that the extension sent
-
-        // the message can contain multiple lines, so split for every line.
-        // the last line might be cut off, but usually that it is fine to ignore that.
-        const msg_lines = message.split("\n");
-
-        // Last line is either an incomplete line, or a empty string
-        cfg.line_progress = msg_lines.pop();
-
-        for(i in msg_lines) {
-            let line = msg_lines[i];
-
-            // ignore empty lines.
-            if(line === "") continue;
-
-            // each line also has the '\n' still in there
-            line += "\n";
-
-            // draw the line
-            append_line(line);
-        }
-
-        // scroll down to the new lines
-        update_scroll();
-    }
-});
+// (Old message handler removed — messages are handled by the unified handler above)
 
 // create new tabs with the new tab '+' button
 el_tab_plus.addEventListener("click", ev => {
