@@ -15,6 +15,9 @@ const el_type    = document.getElementById("type");
 const el_host    = document.getElementById("host");
 const el_port    = document.getElementById("port");
 const el_connect = document.getElementById("connect");
+const el_highlight = document.getElementById("highlight");
+const el_highlight_type = document.getElementById("highlight_type");
+const el_highlight_color = document.getElementById("highlight_color");
 
 // tab bar elements
 const el_tabbar   = document.getElementById("tabbar");
@@ -75,10 +78,12 @@ let cfg = {
 
 // Settings pushed from the extension host (defaults for host/port and filter)
 let settingsDefaults = null;
+let settingsDefaultHighlightColor = '#ffff00';
 
 // If the extension injected settings into the page at load time, apply them immediately.
 if(window.__uscopeDefaults) {
     settingsDefaults = window.__uscopeDefaults.defaults || null;
+    if(window.__uscopeDefaults.defaultHighlightColor) settingsDefaultHighlightColor = window.__uscopeDefaults.defaultHighlightColor;
     if(window.__uscopeDefaults.filterDefault) el_filter_type.value = window.__uscopeDefaults.filterDefault;
     const t = el_type.value;
     if(settingsDefaults && settingsDefaults[t]) {
@@ -119,7 +124,7 @@ if(window.__uscopeDefaults && Array.isArray(window.__uscopeDefaults.savedTabs) &
     const saved = window.__uscopeDefaults.savedTabs.slice();
     for(let i=0;i<saved.length;i++) {
         const s = saved[i];
-        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s) });
+        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s), highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor });
     }
 } else {
     create_new_tab();
@@ -154,6 +159,11 @@ function create_new_tab(spec) {
         name: spec && spec.name ? spec.name : null,
         saved: spec && spec.saved ? true : false,
         key: spec && spec.key ? spec.key : null,
+        // highlight settings for this tab
+        highlight_text: spec && (spec.highlight_text !== undefined) ? spec.highlight_text : "",
+        highlight_type: spec && (spec.highlight_type !== undefined) ? spec.highlight_type : (spec && spec.highlightType ? spec.highlightType : 'simple'),
+        highlight_color: spec && spec.highlight_color ? spec.highlight_color : '#ffff00',
+        highlight_regex: null,
     };
 
     // clicking the 'x' in the tab should close the tab, and switch to a different tab if needed
@@ -313,11 +323,16 @@ function applySavedTabs(savedArray) {
         const exists = cfg.tab_list.find(t => t.key === key);
         if(!exists) {
             // insert at the correct position based on order: insert before the i-th saved tab element or before +
-            create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key });
+            create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key, highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor });
         } else {
             // ensure it's marked saved
             exists.saved = true;
             exists.el.classList.add('saved');
+            // update highlight settings from saved config
+            exists.highlight_text = s.highlight || s.highlightText || exists.highlight_text;
+            exists.highlight_type = s.highlightType || s.highlight_type || exists.highlight_type;
+            exists.highlight_color = s.highlightColor || settingsDefaultHighlightColor || exists.highlight_color;
+            exists.highlight_regex = null;
             // remove close button if present
             if(exists.el_close) {
                 try { exists.el.removeChild(exists.el_close); } catch {}
@@ -386,6 +401,54 @@ function line_matches(line) {
     return true;
 }
 
+// Escape HTML special chars for safe insertion into innerHTML
+function escapeHtml(unsafe) {
+    return unsafe.replace(/[&<>\"']/g, function(c) {
+        switch(c) {
+            case '&': return '&amp;';
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '"': return '&quot;';
+            case "'": return '&#039;';
+        }
+    });
+}
+
+// Apply highlight for the active tab to a single line, returning HTML-safe string (may contain <span> wrappers)
+function applyHighlightToLine(line) {
+    const h = cfg.tab.highlight_text;
+    if(!h || h === '') return escapeHtml(line);
+
+    // determine ignore case for highlight (same heuristic as filter)
+    const ignore_case = h === h.toLowerCase();
+
+    if(cfg.tab.highlight_type === 'regex') {
+        // compile if needed
+        if(cfg.tab.highlight_regex === null) {
+            try {
+                cfg.tab.highlight_regex = new RegExp(h, ignore_case ? 'i' : '');
+            } catch (e) { cfg.tab.highlight_regex = null; }
+        }
+        if(cfg.tab.highlight_regex === null) return escapeHtml(line);
+        try {
+            const re = new RegExp(cfg.tab.highlight_regex.source, (ignore_case ? 'gi' : 'g'));
+            return escapeHtml(line).replace(re, match => `<span style="background-color:${cfg.tab.highlight_color}">${escapeHtml(match)}</span>`);
+        } catch (e) {
+            return escapeHtml(line);
+        }
+    }
+
+    // simple highlight: escape the pattern and replace occurrences
+    const pat = h.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+    const flags = ignore_case ? 'gi' : 'g';
+    try {
+        const re = new RegExp(pat, flags);
+        return escapeHtml(line).replace(re, match => `<span style="background-color:${cfg.tab.highlight_color}">${escapeHtml(match)}</span>`);
+    } catch (e) {
+        return escapeHtml(line);
+    }
+}
+
 // Change the current tab to the new tab
 function switch_tab(tab_new) {
     // if the tab is already gone, don't switch to it
@@ -409,6 +472,11 @@ function switch_tab(tab_new) {
     el_filter.value = cfg.tab.filter_text;
     el_filter_type.value = cfg.tab.filter_type;
 
+    // highlight inputs should reflect tab state
+    if(typeof el_highlight !== 'undefined' && el_highlight) el_highlight.value = cfg.tab.highlight_text || '';
+    if(typeof el_highlight_type !== 'undefined' && el_highlight_type) el_highlight_type.value = cfg.tab.highlight_type || 'simple';
+    if(typeof el_highlight_color !== 'undefined' && el_highlight_color) el_highlight_color.value = cfg.tab.highlight_color || settingsDefaultHighlightColor || '#ffff00';
+
     // different tab means a different filter
     change_filter();
 }
@@ -430,11 +498,11 @@ function output_redraw() {
     for(i in cfg.lines) {
         let line = cfg.lines[i];
         if(line_matches(line))
-            out += line;
+            out += applyHighlightToLine(line);
     }
 
-    // innerText to prevent html elements injection
-    el_output.innerText = out;
+    // set as HTML inside the pre; lines are escaped inside applyHighlightToLine
+    el_output.innerHTML = out;
 
     // everything changed so scroll to the bottom again
     update_scroll();
@@ -612,9 +680,10 @@ function append_line(line) {
     cfg.lines.push(line);
     
     if(line_matches(line)) {
-        // individual lines are added as elements, so a minimal amount of html has to be changed
-        // only on filter change do we completely redraw the lines and use a single element.
-        el_output.appendChild(document.createTextNode(line));
+        // add as an element so we can include highlight markup
+        const span = document.createElement('span');
+        span.innerHTML = applyHighlightToLine(line);
+        el_output.appendChild(span);
     }
 
     // reduce the number of messages, the html rendrer
@@ -704,6 +773,23 @@ el_save.addEventListener("click", ev => {
 
 // if the filter type changed, recompile the filter and update the output console.
 el_filter_type.addEventListener("change", ev => { cfg.tab.filter_type = el_filter_type.value; change_filter(); });
+
+// highlight input changed -> update tab settings and redraw
+if(el_highlight) el_highlight.addEventListener('input', ev => {
+    cfg.tab.highlight_text = el_highlight.value;
+    // reset compiled regex so it will recompile on demand
+    cfg.tab.highlight_regex = null;
+    output_redraw();
+});
+if(el_highlight_type) el_highlight_type.addEventListener('change', ev => {
+    cfg.tab.highlight_type = el_highlight_type.value;
+    cfg.tab.highlight_regex = null;
+    output_redraw();
+});
+if(el_highlight_color) el_highlight_color.addEventListener('input', ev => {
+    cfg.tab.highlight_color = el_highlight_color.value;
+    output_redraw();
+});
 
 // connection type, changes the port. The '-gdb' versions also start gdb and use that to communicate over RTT.
 el_type.addEventListener("change", ev => {

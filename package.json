@@ -130,7 +130,10 @@
               "id": { "type": "string", "description": "Optional stable id for the saved tab" },
               "name": { "type": "string", "description": "Optional display name for the tab" },
               "filter": { "type": "string", "description": "Filter string for the tab" },
-              "filterType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" }
+              "filterType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
+              "highlight": { "type": "string", "description": "Optional highlight text/pattern for this tab" },
+              "highlightType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
+              "highlightColor": { "type": "string", "description": "CSS color for highlight (e.g. '#ffff00' or 'yellow')" }
             }
           },
           "default": []

@@ -36,7 +36,7 @@ Example:
 "uscope.savedTabs": [
 	{ "filter": "CH0", "name": "CH0." },
 	{ "filter": "CH1", "name": "CH1." },
-	{ "filter": "CH\\d+", "name": "CH*", "filterType": "regex" }
+	{ "filter": "CH\\d+", "name": "CH*", "filterType": "regex", "highlight": ".*error.*", "highlightType": "regex", "highlightColor": "#ff0000" }
 ]
 ```
 

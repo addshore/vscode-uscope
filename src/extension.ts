@@ -304,9 +304,11 @@ function view_update() {
             'openocdRttGdb': { host: conf.get('defaults.openocdRttGdb.host', '127.0.0.1'), port: conf.get('defaults.openocdRttGdb.port', 3333) },
             'openocdSwo': { host: conf.get('defaults.openocdSwo.host', '127.0.0.1'), port: conf.get('defaults.openocdSwo.port', 3344) }
         };
+        // default highlight color
+        const defaultHighlightColor = conf.get('defaults.highlightColor', 'yellow');
         const filterDefault = conf.get('filter.defaultType', 'simple');
         const savedTabs = conf.get('savedTabs', []);
-        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs })};</script>`;
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, defaultHighlightColor: defaultHighlightColor })};</script>`;
         html = html.replace("${uscope_settings}", settingsScript);
     } catch (e) {
         html = html.replace("${uscope_settings}", "");

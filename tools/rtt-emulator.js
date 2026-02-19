@@ -27,7 +27,9 @@ const server = net.createServer((socket) => {
   const id = setInterval(() => {
     // Emulate multiple channels occasionally
     const ch = (counter % 3);
-    const payload = `[CH${ch}] ${new Date().toISOString()} - msg ${counter}`;
+    // occasionally emit 'error' lines to help test highlighting
+    const kind = (Math.random() < 0.125) ? 'error' : 'msg';
+    const payload = `[CH${ch}] ${new Date().toISOString()} - ${kind} ${counter}`;
     socket.write(payload + '\n');
     counter += 1;
   }, INTERVAL);
