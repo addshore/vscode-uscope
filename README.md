@@ -36,8 +36,22 @@ Example:
 "uscope.savedTabs": [
 	{ "filter": "CH0", "name": "CH0." },
 	{ "filter": "CH1", "name": "CH1." },
-	{ "filter": "CH\\d+", "name": "CH*", "filterType": "regex", "highlight": ".*error.*", "highlightType": "regex", "highlightColor": "#ff0000" }
+	{ "filter": "CH\\d+", "name": "CH*"}
+],
+"uscope.highlights": [
+	// A reusable highlight definition that can be applied to multiple tabs by id
+	{ "id": "red error lines", "filter": ".*error.*", "color": "#ff0000", "type": "regex", "always": true }
 ]
+
+You can also reference highlights from saved tabs by id instead of embedding the pattern directly:
+
+```json
+"uscope.savedTabs": [
+	{ "filter": "CH0", "name": "CH0." },
+	{ "filter": "CH1", "name": "CH1." },
+	{ "filter": "CH\\d+", "name": "CH*", "filterIds": ["red error lines"] }
+]
+```
 ```
 
 Saved tabs show as left-most tabs in μScope and are not closable from the UI. 

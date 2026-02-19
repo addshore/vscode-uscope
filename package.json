@@ -121,6 +121,12 @@
           "description": "Default port for OpenOCD SWO"
         }
         ,
+        "uscope.defaults.highlightColor": {
+          "type": "string",
+          "default": "#ffff00",
+          "description": "Default highlight color used when a per-tab color is not set"
+        }
+        ,
         "uscope.savedTabs": {
           "type": "array",
           "description": "Saved filter tabs for the workspace. These are shown as tabs in μScope on project open.",
@@ -134,6 +140,23 @@
               "highlight": { "type": "string", "description": "Optional highlight text/pattern for this tab" },
               "highlightType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" },
               "highlightColor": { "type": "string", "description": "CSS color for highlight (e.g. '#ffff00' or 'yellow')" }
+                  ,"filterIds": { "type": "array", "description": "Optional array of highlight ids to reference from 'uscope.highlights'", "items": { "type": "string" } }
+            }
+          },
+          "default": []
+        }
+        ,
+        "uscope.highlights": {
+          "type": "array",
+          "description": "Reusable highlight rules that can be applied to saved tabs or globally.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "description": "Unique id for referencing this highlight from saved tabs" },
+              "filter": { "type": "string", "description": "Pattern or text to match" },
+              "type": { "type": "string", "enum": ["simple", "regex"], "default": "regex", "description": "How to interpret the filter" },
+              "color": { "type": "string", "description": "CSS color for matching text (e.g. '#ff0000')" },
+              "always": { "type": "boolean", "description": "If true this highlight applies to all tabs", "default": false }
             }
           },
           "default": []

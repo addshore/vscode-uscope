@@ -41,10 +41,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Forward savedTabs configuration changes live so the webview can add/remove saved tabs immediately.
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
         if(!view) return;
+        const conf = vscode.workspace.getConfiguration('uscope');
         if(e.affectsConfiguration('uscope.savedTabs')) {
-            const conf = vscode.workspace.getConfiguration('uscope');
             const savedTabs = conf.get('savedTabs', []);
             view.webview.postMessage({ type: 'savedTabs', savedTabs: savedTabs });
+        }
+        if(e.affectsConfiguration('uscope.highlights')) {
+            const highlights = conf.get('highlights', []);
+            view.webview.postMessage({ type: 'highlights', highlights: highlights });
         }
     }));
 }
@@ -260,6 +264,43 @@ function view_recv(data: any) {
         socket?.write(value);
     }
 
+    // Persist a tab as a savedTab in workspace settings
+    if(data.type === 'saveTab') {
+        try {
+            const conf = vscode.workspace.getConfiguration('uscope');
+            const savedTabs = conf.get<any[]>('savedTabs', []);
+            const incoming = data.tab || {};
+            const incomingKey = data.key || `${incoming.name||''}|${incoming.filter||''}|${incoming.filterType||incoming.filter_type||'simple'}`;
+            const makeKey = (s: any) => `${s.name||''}|${s.filter||''}|${s.filterType||s.filter_type||'simple'}`;
+            let ix = savedTabs.findIndex(s => makeKey(s) === incomingKey);
+            const entry: any = {
+                name: incoming.name || '',
+                filter: incoming.filter || '',
+                filterType: incoming.filterType || incoming.filter_type || 'simple'
+            };
+            if(incoming.highlight !== undefined) entry.highlight = incoming.highlight;
+            if(incoming.highlightType !== undefined) entry.highlightType = incoming.highlightType;
+            if(incoming.highlightColor !== undefined) entry.highlightColor = incoming.highlightColor;
+            if(incoming.filterIds !== undefined) entry.filterIds = incoming.filterIds;
+
+            if(ix >= 0) {
+                // merge with existing entry
+                savedTabs[ix] = Object.assign({}, savedTabs[ix], entry);
+            } else {
+                savedTabs.push(entry);
+            }
+
+            conf.update('savedTabs', savedTabs, vscode.ConfigurationTarget.Workspace).then(() => {
+                // notify webview immediately
+                if(view) view.webview.postMessage({ type: 'savedTabs', savedTabs: savedTabs });
+            }, err => {
+                if(view) view.webview.postMessage({ type: 'error', value: 'Failed to save tab: ' + (err && err.message? err.message : String(err)) });
+            });
+        } catch (e) {
+            if(view) view.webview.postMessage({ type: 'error', value: 'Failed to save tab: ' + String(e) });
+        }
+    }
+
     // user wants to close the socket, so lets do that
     if(data.type === 'disconnect') {
         // mark as manual disconnect so automatic reconnect attempts stop
@@ -308,7 +349,8 @@ function view_update() {
         const defaultHighlightColor = conf.get('defaults.highlightColor', 'yellow');
         const filterDefault = conf.get('filter.defaultType', 'simple');
         const savedTabs = conf.get('savedTabs', []);
-        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, defaultHighlightColor: defaultHighlightColor })};</script>`;
+        const highlights = conf.get('highlights', []);
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, highlights: highlights, defaultHighlightColor: defaultHighlightColor })};</script>`;
         html = html.replace("${uscope_settings}", settingsScript);
     } catch (e) {
         html = html.replace("${uscope_settings}", "");

@@ -64,7 +64,7 @@ button:hover,.tab.active,.tab:hover {
 
 /* Console output, use editor like styling */
 pre {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-font-family);
   font-weight: var(--vscode-editor-font-weight);
   font-size: var(--vscode-editor-font-size);
   background-color: var(--vscode-editor-background);
@@ -73,7 +73,8 @@ pre {
 
 /* font for icons ('x', and '+') */
 .icon {
-  font: icon;
+  /* use the same simple font for icons/text */
+  font-family: var(--vscode-font-family);
   text-align: center;
 }
 

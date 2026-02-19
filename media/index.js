@@ -28,6 +28,7 @@ const el_save   = document.getElementById("save");
 const el_clear  = document.getElementById("clear");
 const el_follow = document.getElementById("follow");
 const el_filter_type = document.getElementById("filter_type");
+const el_save_tab = document.getElementById("save_tab");
 
 // The vscode api for sending messages to 'extension.ts'
 const vscode = acquireVsCodeApi();
@@ -79,11 +80,20 @@ let cfg = {
 // Settings pushed from the extension host (defaults for host/port and filter)
 let settingsDefaults = null;
 let settingsDefaultHighlightColor = '#ffff00';
+let settingsHighlights = [];
+let settingsHighlightsById = {};
 
 // If the extension injected settings into the page at load time, apply them immediately.
 if(window.__uscopeDefaults) {
     settingsDefaults = window.__uscopeDefaults.defaults || null;
     if(window.__uscopeDefaults.defaultHighlightColor) settingsDefaultHighlightColor = window.__uscopeDefaults.defaultHighlightColor;
+    // load highlight definitions
+    if(Array.isArray(window.__uscopeDefaults.highlights)) {
+        settingsHighlights = window.__uscopeDefaults.highlights.slice();
+        for(const h of settingsHighlights) {
+            if(h && h.id) settingsHighlightsById[h.id] = h;
+        }
+    }
     if(window.__uscopeDefaults.filterDefault) el_filter_type.value = window.__uscopeDefaults.filterDefault;
     const t = el_type.value;
     if(settingsDefaults && settingsDefaults[t]) {
@@ -92,6 +102,11 @@ if(window.__uscopeDefaults) {
     }
     // Do not treat this as a live update — these are initial defaults only
 }
+
+// Handle settings updates posted later by the extension
+window.addEventListener('message', event => {
+    // Note: the unified handler below also listens for messages; this separate handler processes highlights updates early
+});
 
 // helper to create a unique key for a tab spec
 function tabKey(spec) {
@@ -124,7 +139,7 @@ if(window.__uscopeDefaults && Array.isArray(window.__uscopeDefaults.savedTabs) &
     const saved = window.__uscopeDefaults.savedTabs.slice();
     for(let i=0;i<saved.length;i++) {
         const s = saved[i];
-        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s), highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor });
+        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s), highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor, highlight_refs: s.filterIds || s.highlightIds || s.filterIds || [] });
     }
 } else {
     create_new_tab();
@@ -164,6 +179,10 @@ function create_new_tab(spec) {
         highlight_type: spec && (spec.highlight_type !== undefined) ? spec.highlight_type : (spec && spec.highlightType ? spec.highlightType : 'simple'),
         highlight_color: spec && spec.highlight_color ? spec.highlight_color : '#ffff00',
         highlight_regex: null,
+        // references to named highlight rules
+        highlight_refs: spec && spec.highlight_refs ? (Array.isArray(spec.highlight_refs) ? spec.highlight_refs.slice() : [spec.highlight_refs]) : [],
+        // resolved highlight rules (objects with filter/type/color)
+        resolved_highlights: [],
     };
 
     // clicking the 'x' in the tab should close the tab, and switch to a different tab if needed
@@ -255,6 +274,34 @@ function create_new_tab(spec) {
     else tab.el_txt.innerText = tab.filter_text;
     // switch to the new tab
     switch_tab(tab);
+    // resolve highlights for this tab (global always/highlight refs + per-tab inline)
+    resolveTabHighlights(tab);
+}
+
+// Resolve and populate tab.resolved_highlights based on settingsHighlights, referenced ids and per-tab inline highlight
+function resolveTabHighlights(tab) {
+    const list = [];
+    // include global always highlights
+    for(const h of settingsHighlights) {
+        if(h && h.always) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', color: h.color || h.highlightColor || settingsDefaultHighlightColor, id: h.id || null });
+    }
+    // include referenced highlights by id
+    for(const id of (tab.highlight_refs || [])) {
+        const h = settingsHighlightsById[id];
+        if(h) list.push({ filter: h.filter || h.regex || '', type: h.type || h.highlightType || 'regex', color: h.color || h.highlightColor || settingsDefaultHighlightColor, id: h.id });
+    }
+    // include per-tab inline highlight if present
+    if(tab.highlight_text && tab.highlight_text !== '') {
+        list.push({ filter: tab.highlight_text, type: tab.highlight_type || 'simple', color: tab.highlight_color || settingsDefaultHighlightColor, id: null });
+    }
+    // compile regex placeholders on the rule objects
+    for(const r of list) {
+        r._regex = null;
+        if(r.type === 'regex') {
+            try { r._regex = new RegExp(r.filter, r.filter === r.filter.toLowerCase() ? 'i' : ''); } catch(e) { r._regex = null; }
+        }
+    }
+    tab.resolved_highlights = list;
 }
 
 // Reorder tabs so saved tabs appear first in the order provided by savedKeys, then session tabs in existing order
@@ -320,10 +367,28 @@ function applySavedTabs(savedArray) {
     for(let i=0;i<saved.length;i++) {
         const s = saved[i];
         const key = tabKey(s);
-        const exists = cfg.tab_list.find(t => t.key === key);
+        let exists = cfg.tab_list.find(t => t.key === key);
         if(!exists) {
-            // insert at the correct position based on order: insert before the i-th saved tab element or before +
-            create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key, highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor });
+            // try to match an existing session tab by name/filter/type to avoid creating a duplicate
+            const match = cfg.tab_list.find(t => ((t.name||'') === (s.name||'')) && ((t.filter_text||'') === (s.filter||'')) && ((t.filter_type||'') === (s.filterType || s.filter_type || 'simple')) );
+            if(match) {
+                exists = match;
+                exists.key = key;
+                exists.saved = true;
+                exists.el.classList.add('saved');
+                // update highlight refs and per-tab highlight
+                exists.highlight_text = s.highlight || s.highlightText || exists.highlight_text;
+                exists.highlight_type = s.highlightType || s.highlight_type || exists.highlight_type;
+                exists.highlight_color = s.highlightColor || settingsDefaultHighlightColor || exists.highlight_color;
+                exists.highlight_refs = s.filterIds || s.highlightIds || exists.highlight_refs;
+                exists.highlight_regex = null;
+                resolveTabHighlights(exists);
+                // remove close button if present
+                if(exists.el_close) { try { exists.el.removeChild(exists.el_close); } catch {} exists.el_close = null; }
+            } else {
+                // insert at the correct position based on order: insert before the i-th saved tab element or before +
+                create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key, highlight_text: s.highlight || s.highlightText || "", highlight_type: s.highlightType || s.highlight_type || 'simple', highlight_color: s.highlightColor || settingsDefaultHighlightColor, highlight_refs: s.filterIds || s.highlightIds || [] });
+            }
         } else {
             // ensure it's marked saved
             exists.saved = true;
@@ -333,6 +398,10 @@ function applySavedTabs(savedArray) {
             exists.highlight_type = s.highlightType || s.highlight_type || exists.highlight_type;
             exists.highlight_color = s.highlightColor || settingsDefaultHighlightColor || exists.highlight_color;
             exists.highlight_regex = null;
+            // update highlight refs
+            exists.highlight_refs = s.filterIds || s.highlightIds || exists.highlight_refs;
+            // re-resolve highlights for this tab
+            resolveTabHighlights(exists);
             // remove close button if present
             if(exists.el_close) {
                 try { exists.el.removeChild(exists.el_close); } catch {}
@@ -416,37 +485,30 @@ function escapeHtml(unsafe) {
 
 // Apply highlight for the active tab to a single line, returning HTML-safe string (may contain <span> wrappers)
 function applyHighlightToLine(line) {
-    const h = cfg.tab.highlight_text;
-    if(!h || h === '') return escapeHtml(line);
+    // apply all resolved highlights for the current tab (global always, referenced ids, inline)
+    const rules = cfg.tab.resolved_highlights || [];
+    if(!rules || rules.length === 0) return escapeHtml(line);
 
-    // determine ignore case for highlight (same heuristic as filter)
-    const ignore_case = h === h.toLowerCase();
-
-    if(cfg.tab.highlight_type === 'regex') {
-        // compile if needed
-        if(cfg.tab.highlight_regex === null) {
-            try {
-                cfg.tab.highlight_regex = new RegExp(h, ignore_case ? 'i' : '');
-            } catch (e) { cfg.tab.highlight_regex = null; }
-        }
-        if(cfg.tab.highlight_regex === null) return escapeHtml(line);
+    // Start with escaped line and apply each rule sequentially. We perform replacements on the escaped string
+    // by matching the same pattern against the escaped content where possible.
+    let out = escapeHtml(line);
+    for(const r of rules) {
+        if(!r || !r.filter) continue;
+        const ignore_case = r.filter === r.filter.toLowerCase();
         try {
-            const re = new RegExp(cfg.tab.highlight_regex.source, (ignore_case ? 'gi' : 'g'));
-            return escapeHtml(line).replace(re, match => `<span style="background-color:${cfg.tab.highlight_color}">${escapeHtml(match)}</span>`);
+            if(r.type === 'regex' && r._regex) {
+                const re = new RegExp(r._regex.source, 'g' + (ignore_case ? 'i' : ''));
+                out = out.replace(re, match => `<span style="background-color:${r.color}">${match}</span>`);
+            } else {
+                const pat = r.filter.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+                const re = new RegExp(pat, 'g' + (ignore_case ? 'i' : ''));
+                out = out.replace(re, match => `<span style="background-color:${r.color}">${match}</span>`);
+            }
         } catch (e) {
-            return escapeHtml(line);
+            // ignore this rule on error
         }
     }
-
-    // simple highlight: escape the pattern and replace occurrences
-    const pat = h.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    const flags = ignore_case ? 'gi' : 'g';
-    try {
-        const re = new RegExp(pat, flags);
-        return escapeHtml(line).replace(re, match => `<span style="background-color:${cfg.tab.highlight_color}">${escapeHtml(match)}</span>`);
-    } catch (e) {
-        return escapeHtml(line);
-    }
+    return out;
 }
 
 // Change the current tab to the new tab
@@ -591,6 +653,16 @@ window.addEventListener('message', event => {
     // saved tabs update from the extension
     if(data.type === 'savedTabs') {
         applySavedTabs(data.savedTabs || []);
+        return;
+    }
+    // highlights update from the extension
+    if(data.type === 'highlights') {
+        settingsHighlights = Array.isArray(data.highlights) ? data.highlights.slice() : [];
+        settingsHighlightsById = {};
+        for(const h of settingsHighlights) if(h && h.id) settingsHighlightsById[h.id] = h;
+        // re-resolve highlights for all tabs
+        for(const t of cfg.tab_list) resolveTabHighlights(t);
+        output_redraw();
         return;
     }
 
@@ -771,6 +843,25 @@ el_save.addEventListener("click", ev => {
     msg_send({ type: 'save', value: cfg.lines });
 });
 
+// Save current tab to workspace savedTabs (create or update)
+if(el_save_tab) el_save_tab.addEventListener('click', ev => {
+    const t = cfg.tab;
+    const payload = {
+        type: 'saveTab',
+        key: t.key || `${t.name||''}|${t.filter_text||''}|${t.filter_type||'simple'}`,
+        tab: {
+            name: t.name || '',
+            filter: t.filter_text || '',
+            filterType: t.filter_type || 'simple',
+            highlight: t.highlight_text || '',
+            highlightType: t.highlight_type || 'simple',
+            highlightColor: t.highlight_color || settingsDefaultHighlightColor,
+            filterIds: t.highlight_refs || []
+        }
+    };
+    msg_send(payload);
+});
+
 // if the filter type changed, recompile the filter and update the output console.
 el_filter_type.addEventListener("change", ev => { cfg.tab.filter_type = el_filter_type.value; change_filter(); });
 
@@ -779,15 +870,18 @@ if(el_highlight) el_highlight.addEventListener('input', ev => {
     cfg.tab.highlight_text = el_highlight.value;
     // reset compiled regex so it will recompile on demand
     cfg.tab.highlight_regex = null;
+    resolveTabHighlights(cfg.tab);
     output_redraw();
 });
 if(el_highlight_type) el_highlight_type.addEventListener('change', ev => {
     cfg.tab.highlight_type = el_highlight_type.value;
     cfg.tab.highlight_regex = null;
+    resolveTabHighlights(cfg.tab);
     output_redraw();
 });
 if(el_highlight_color) el_highlight_color.addEventListener('input', ev => {
     cfg.tab.highlight_color = el_highlight_color.value;
+    resolveTabHighlights(cfg.tab);
     output_redraw();
 });
 
