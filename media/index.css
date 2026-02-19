@@ -105,3 +105,13 @@ pre {
   overflow: scroll;
   overflow-wrap: break-word;
 }
+
+/* find matches styling */
+.find-match {
+  background-color: rgba(135,206,250,0.3); /* light sky */
+  border-radius: 2px;
+}
+.find-selected {
+  background-color: rgba(255,235,59,0.6); /* yellow-ish */
+  outline: 2px solid rgba(255,183,0,0.9);
+}

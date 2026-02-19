@@ -9,6 +9,13 @@ const el_output = document.getElementById("output");
 const el_input  = document.getElementById("input");
 const el_filter = document.getElementById("filter");
 
+// find / search UI (per-tab)
+const el_find = document.getElementById("find");
+const el_find_type = document.getElementById("find_type");
+const el_find_prev = document.getElementById("find_prev");
+const el_find_next = document.getElementById("find_next");
+const el_find_count = document.getElementById("find_count");
+
 // right pane
 // selecting the connection type
 const el_type    = document.getElementById("type");
@@ -73,6 +80,12 @@ let cfg = {
 
     // list of all tabs, objects are the same as the tab object above
     tab_list: [],
+    // find/search state for the active tab
+    find_text: "",
+    find_type: 'simple',
+    find_regex: null,
+    find_matches: [], // { lineIndex, start, end }
+    find_ix: -1, // index in find_matches of current selection
     // whether we are currently in a reconnect loop
     reconnecting: false,
 };
@@ -183,6 +196,10 @@ function create_new_tab(spec) {
         filter_text: spec && spec.filter_text ? spec.filter_text : "",
         filter_regex: null, // can be null if the text is an invalid regex
         filter_type: spec && spec.filter_type ? spec.filter_type : (spec && spec.filterType ? spec.filterType : 'simple'),
+        // find/search settings for this tab
+        find_text: spec && spec.find_text ? spec.find_text : "",
+        find_type: spec && spec.find_type ? spec.find_type : (spec && spec.findType ? spec.findType : 'simple'),
+        find_regex: null,
         name: spec && spec.name ? spec.name : null,
         saved: spec && spec.saved ? true : false,
         key: spec && spec.key ? spec.key : null,
@@ -562,6 +579,14 @@ function switch_tab(tab_new) {
     if(typeof el_highlight_fg !== 'undefined' && el_highlight_fg) el_highlight_fg.value = cfg.tab.highlight_fg || settingsDefaultHighlightForeground || '#000000';
     if(typeof el_highlight_bg !== 'undefined' && el_highlight_bg) el_highlight_bg.value = cfg.tab.highlight_bg || settingsDefaultHighlightBackground || '#ffff00';
 
+    // find inputs should reflect tab state
+    if(typeof el_find !== 'undefined' && el_find) el_find.value = cfg.tab.find_text || '';
+    if(typeof el_find_type !== 'undefined' && el_find_type) el_find_type.value = cfg.tab.find_type || 'simple';
+    // sync working find state to the active tab
+    cfg.find_text = cfg.tab.find_text || '';
+    cfg.find_type = cfg.tab.find_type || 'simple';
+    cfg.find_ix = -1;
+
     // different tab means a different filter
     change_filter();
 }
@@ -574,23 +599,74 @@ function update_scroll() {
 
 // Redraw the entire output console with the current active filter
 function output_redraw() {
-    // we accumulate all lines into a single string and set that as the element.
-    // I measured this and it is significantly faster than appending tons of text elements directly.
-    // NOTE: This is not very efficient given that we copy at every line, is there a string builder class?
-    // according to this <https://stackoverflow.com/questions/2087522/does-javascript-have-a-built-in-stringbuilder-class> this is actually way
-    // faster than a join. Bit strange, so maybe the browser does more smart things.
-    let out = "";
-    for(i in cfg.lines) {
-        let line = cfg.lines[i];
-        if(line_matches(line))
-            out += applyHighlightToLine(line);
+    // Build/find regex for current find text
+    function buildFindRegex() {
+        const txt = cfg.find_text || "";
+        cfg.find_regex = null;
+        if(!txt || txt === "") { cfg.find_matches = []; cfg.find_ix = -1; return; }
+        const ignore_case = txt === txt.toLowerCase();
+        try {
+            if(cfg.find_type === 'regex') {
+                cfg.find_regex = new RegExp(txt, ignore_case ? 'gi' : 'g');
+            } else {
+                const esc = txt.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+                cfg.find_regex = new RegExp(esc, ignore_case ? 'gi' : 'g');
+            }
+            if(el_find) el_find.style = "";
+        } catch(e) {
+            cfg.find_regex = null;
+            if(el_find) el_find.style = "outline: 2px solid red !important; outline-offset: -1px";
+        }
     }
 
-    // set as HTML inside the pre; lines are escaped inside applyHighlightToLine
+    buildFindRegex();
+
+    // accumulate lines and inject per-line wrappers so we can target them
+    let out = "";
+    cfg.find_matches = [];
+    let matchCounter = 0;
+    for(let i = 0; i < cfg.lines.length; i++) {
+        let line = cfg.lines[i];
+        if(!line_matches(line)) continue;
+        let lineHtml = applyHighlightToLine(line);
+
+        // apply find highlighting on the already-escaped HTML
+        if(cfg.find_regex) {
+            try {
+                // replace matches with a span wrapper and track matches
+                lineHtml = lineHtml.replace(cfg.find_regex, (m) => {
+                    const isSelected = (matchCounter === cfg.find_ix);
+                    const cls = isSelected ? 'find-match find-selected' : 'find-match';
+                    cfg.find_matches.push({ lineIndex: i });
+                    matchCounter++;
+                    return `<span class="${cls}">${m}</span>`;
+                });
+            } catch(e) {
+                // ignore regex application errors
+            }
+        }
+
+        out += `<span data-line="${i}">${lineHtml}</span>`;
+    }
+
     el_output.innerHTML = out;
 
-    // everything changed so scroll to the bottom again
-    update_scroll();
+    // update match count UI
+    if(el_find_count) {
+        if(cfg.find_matches.length === 0) el_find_count.innerText = '0';
+        else el_find_count.innerText = (cfg.find_ix >= 0 ? (cfg.find_ix + 1) : '0') + '/' + cfg.find_matches.length;
+    }
+
+    // scroll selected match into view if present
+    const sel = el_output.querySelector('.find-selected');
+    if(sel) {
+        // nearest line wrapper
+        const parent = sel.closest('[data-line]');
+        if(parent) parent.scrollIntoView({ block: 'center' });
+    } else {
+        // otherwise update normal scroll behavior
+        update_scroll();
+    }
 }
 
 // Send a message to the extension
@@ -778,7 +854,13 @@ function append_line(line) {
         // add as an element so we can include highlight markup
         const span = document.createElement('span');
         span.innerHTML = applyHighlightToLine(line);
+        // set data-line to the absolute index in cfg.lines so we can find it later
+        span.setAttribute('data-line', String(cfg.lines.length - 1));
         el_output.appendChild(span);
+        // if there is an active find, redraw to inject find-match wrappers and update counts
+        if(cfg.find_text && cfg.find_text !== '') {
+            try { output_redraw(); } catch(e) {}
+        }
     }
 
     // reduce the number of messages, the html rendrer
@@ -870,6 +952,35 @@ el_save.addEventListener("click", ev => {
 
 // if the filter type changed, recompile the filter and update the output console.
 el_filter_type.addEventListener("change", ev => { cfg.tab.filter_type = el_filter_type.value; change_filter(); });
+
+// Find UI handlers
+if(el_find) el_find.addEventListener('input', ev => {
+    cfg.find_text = el_find.value || '';
+    if(cfg.tab) cfg.tab.find_text = cfg.find_text;
+    cfg.find_type = el_find_type ? el_find_type.value : 'simple';
+    if(cfg.tab) cfg.tab.find_type = cfg.find_type;
+    cfg.find_ix = -1;
+    output_redraw();
+});
+if(el_find_type) el_find_type.addEventListener('change', ev => {
+    cfg.find_type = el_find_type.value;
+    if(cfg.tab) cfg.tab.find_type = cfg.find_type;
+    cfg.find_ix = -1;
+    output_redraw();
+});
+
+function findNext() {
+    if(!cfg.find_matches || cfg.find_matches.length === 0) return;
+    cfg.find_ix = (cfg.find_ix + 1) % cfg.find_matches.length;
+    output_redraw();
+}
+function findPrev() {
+    if(!cfg.find_matches || cfg.find_matches.length === 0) return;
+    cfg.find_ix = (cfg.find_ix - 1 + cfg.find_matches.length) % cfg.find_matches.length;
+    output_redraw();
+}
+if(el_find_next) el_find_next.addEventListener('click', ev => { findNext(); });
+if(el_find_prev) el_find_prev.addEventListener('click', ev => { findPrev(); });
 
 // highlight input changed -> update tab settings and redraw
 if(el_highlight) el_highlight.addEventListener('input', ev => {

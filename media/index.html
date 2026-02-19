@@ -24,6 +24,16 @@
 
         <!-- Bottom row for filter and input -->
         <div id='bottom' class='hflex shrink'>
+                <div class='hflex' style='flex:0 0 auto; gap:4px; align-items:center'>
+                    <input id='find' placeholder="Find" style='width:180px'></input>
+                    <select name="find_type" id="find_type">
+                        <option value="simple">Simple</option>
+                        <option value="regex">Regex</option>
+                    </select>
+                    <button id='find_prev' class='icon' title='Previous'>◀</button>
+                    <button id='find_next' class='icon' title='Next'>▶</button>
+                    <span id='find_count' style='min-width:40px;text-align:center'></span>
+                </div>
                 <input id='filter' placeholder="Filter" class='grow'></input>
                 <input id='input' placeholder="Input Command" class='grow'></input>
                 <button id='follow'>Scroll to bottom</button>
