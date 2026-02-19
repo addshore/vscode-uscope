@@ -11,6 +11,20 @@ Disable or disconnect other external RTT viewers such as the RTT console in Cort
 
 ## Preferences
 
+### Connection defaults
+
+You can configure default hosts/ports and the default filter type for the UI via workspace or user settings.
+
+Example (set default host/port for J-Link RTT and the default filter type):
+
+```json
+"uscope.defaults.jlinkRtt.host": "127.0.0.1",
+"uscope.defaults.jlinkRtt.port": 19021,
+"uscope.filter.defaultType": "simple"
+```
+
+These settings will be used as the initial values shown when μScope is opened for that project, and can be changed once the project is open.
+
 ### Saved filter tabs
 
 You can predefine filter tabs for a workspace so they appear automatically when the project is opened in VS Code.
