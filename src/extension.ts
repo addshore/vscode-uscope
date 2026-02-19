@@ -308,13 +308,17 @@ function view_update() {
             'openocdRttGdb': { host: conf.get('defaults.openocdRttGdb.host', '127.0.0.1'), port: conf.get('defaults.openocdRttGdb.port', 3333) },
             'openocdSwo': { host: conf.get('defaults.openocdSwo.host', '127.0.0.1'), port: conf.get('defaults.openocdSwo.port', 3344) }
         };
+        // initial connection type to show (one of the select option values, e.g. 'jlinkRtt')
+        const initialConnection = conf.get('defaults.initialConnection', 'jlinkRtt');
+        // when true, automatically start connecting using the chosen initialConnection on load
+        const connectOnLoad = conf.get('defaults.connectOnLoad', false);
         // default highlight foreground/background
         const defaultHighlightForeground = conf.get('defaults.highlightForeground', '#000000');
         const defaultHighlightBackground = conf.get('defaults.highlightBackground', '#ffff00');
         const filterDefault = conf.get('filter.defaultType', 'simple');
         const savedTabs = conf.get('savedTabs', []);
         const highlights = conf.get('highlights', []);
-        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, highlights: highlights, defaultHighlightForeground: defaultHighlightForeground, defaultHighlightBackground: defaultHighlightBackground })};</script>`;
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs, highlights: highlights, defaultHighlightForeground: defaultHighlightForeground, defaultHighlightBackground: defaultHighlightBackground, initialConnection: initialConnection, connectOnLoad: connectOnLoad })};</script>`;
         html = html.replace("${uscope_settings}", settingsScript);
     } catch (e) {
         html = html.replace("${uscope_settings}", "");

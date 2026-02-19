@@ -122,6 +122,18 @@
           "description": "Default port for OpenOCD SWO"
         }
         ,
+        "uscope.defaults.initialConnection": {
+          "type": "string",
+          "enum": ["jlinkRtt","jlinkSwo","jlinkTelnet","stlinkRttGdb","stlinkSwo","openocdRttGdb","openocdSwo"],
+          "default": "jlinkRtt",
+          "description": "Initial connection type to show in the UI (one of the connection type values)"
+        },
+        "uscope.defaults.connectOnLoad": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, μScope will automatically start connecting using the initial connection when opened"
+        }
+        ,
         "uscope.defaults.highlightForeground": {
           "type": "string",
           "default": "#000000",

@@ -97,10 +97,18 @@ if(window.__uscopeDefaults) {
         }
     }
     if(window.__uscopeDefaults.filterDefault) el_filter_type.value = window.__uscopeDefaults.filterDefault;
+    // if an initial connection type is requested by the extension settings, use it
+    if(window.__uscopeDefaults.initialConnection) {
+        try { el_type.value = window.__uscopeDefaults.initialConnection; } catch(e) {}
+    }
     const t = el_type.value;
     if(settingsDefaults && settingsDefaults[t]) {
         el_host.value = settingsDefaults[t].host;
         el_port.value = String(settingsDefaults[t].port);
+    }
+    // optionally start connecting immediately
+    if(window.__uscopeDefaults.connectOnLoad) {
+        try { connect(); } catch(e) {}
     }
     // Do not treat this as a live update — these are initial defaults only
 }

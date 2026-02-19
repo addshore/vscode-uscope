@@ -23,6 +23,13 @@ Example (set default host/port for J-Link RTT and the default filter type):
 "uscope.filter.defaultType": "simple"
 ```
 
+You can also choose which connection type is initially shown and whether μScope should start connecting automatically when opened. Example:
+
+```json
+"uscope.defaults.initialConnection": "jlinkRtt",
+"uscope.defaults.connectOnLoad": true
+```
+
 These settings will be used as the initial values shown when μScope is opened for that project, and can be changed once the project is open.
 
 ### Saved filter tabs
