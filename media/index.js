@@ -73,6 +73,21 @@ let cfg = {
     reconnecting: false,
 };
 
+// Settings pushed from the extension host (defaults for host/port and filter)
+let settingsDefaults = null;
+
+// If the extension injected settings into the page at load time, apply them immediately.
+if(window.__uscopeDefaults) {
+    settingsDefaults = window.__uscopeDefaults.defaults || null;
+    if(window.__uscopeDefaults.filterDefault) el_filter_type.value = window.__uscopeDefaults.filterDefault;
+    const t = el_type.value;
+    if(settingsDefaults && settingsDefaults[t]) {
+        el_host.value = settingsDefaults[t].host;
+        el_port.value = String(settingsDefaults[t].port);
+    }
+    // Do not treat this as a live update — these are initial defaults only
+}
+
 // lets create the first tab
 create_new_tab();
 
@@ -333,6 +348,19 @@ window.addEventListener('message', event => {
     const data = event.data;
     if(!data || !data.type) return;
 
+    // configuration defaults
+    if(data.type === 'settings') {
+        settingsDefaults = data.defaults || null;
+        if(data.filterDefault) el_filter_type.value = data.filterDefault;
+        // apply host/port for the currently selected type
+        const t = el_type.value;
+        if(settingsDefaults && settingsDefaults[t]) {
+            el_host.value = settingsDefaults[t].host;
+            el_port.value = String(settingsDefaults[t].port);
+        }
+        return;
+    }
+
     switch(data.type) {
         case 'connect':
             on_connect();
@@ -509,24 +537,33 @@ el_filter_type.addEventListener("change", ev => { cfg.tab.filter_type = el_filte
 
 // connection type, changes the port. The '-gdb' versions also start gdb and use that to communicate over RTT.
 el_type.addEventListener("change", ev => {
-    if(el_type.value === "jl-rtt")
+    // prefer settings pushed from the extension host
+    const mapping = settingsDefaults ? settingsDefaults[el_type.value] : null;
+    if(mapping) {
+        el_host.value = mapping.host;
+        el_port.value = String(mapping.port);
+        return;
+    }
+
+    // fallback hardcoded ports if no settings available
+    if(el_type.value === "jlinkRtt")
         el_port.value = "19021";
 
-    if(el_type.value === "jl-swo")
+    if(el_type.value === "jlinkSwo")
         el_port.value = "2332";
 
-    if(el_type.value === "jl-telnet")
+    if(el_type.value === "jlinkTelnet")
         el_port.value = "2333";
 
-    if(el_type.value === "st-swo")
+    if(el_type.value === "stlinkSwo")
         el_port.value = "61235";
 
-    if(el_type.value === "st-gdb")
+    if(el_type.value === "stlinkRttGdb")
         el_port.value = "61234";
 
-    if(el_type.value === "oc-gdb")
+    if(el_type.value === "openocdRttGdb")
         el_port.value = "3333";
 
-    if(el_type.value === "oc-swo")
+    if(el_type.value === "openocdSwo")
         el_port.value = "3344";
 });

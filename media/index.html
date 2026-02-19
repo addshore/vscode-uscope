@@ -7,6 +7,7 @@
     <link href="${uri_css}" rel="stylesheet">
 
     <!-- Load the program code. We use 'defer' to load the js after the document is loaded, so we can access the elements immediately. -->
+    ${uscope_settings}
     <script src="${uri_js}" defer></script>
 </head>
 <body class="hflex">
@@ -37,17 +38,17 @@
         Connection Type
         <select name="type" id="type">
             <optgroup label="SEGGER J-Link">
-                <option value="jl-rtt">RTT</option>
-                <option value="jl-swo">SWO</option>
-                <option value="jl-telnet">Telnet</option>
+                <option value="jlinkRtt">RTT</option>
+                <option value="jlinkSwo">SWO</option>
+                <option value="jlinkTelnet">Telnet</option>
             </optgroup>
             <optgroup label="ST-Link">
-                <option value="st-gdb">RTT (over GDB)</option>
-                <option value="st-swo">SWO</option>
+                <option value="stlinkRttGdb">RTT (over GDB)</option>
+                <option value="stlinkSwo">SWO</option>
             </optgroup>
             <optgroup label="OpenOCD">
-                <option value="oc-gdb">RTT (over GDB)</option>
-                <option value="oc-swo">SWO</option>
+                <option value="openocdRttGdb">RTT (over GDB)</option>
+                <option value="openocdSwo">SWO</option>
             </optgroup>
         </select>
         Host

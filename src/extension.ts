@@ -38,7 +38,10 @@ let lastHow: string | null = null;
 export function activate(context: vscode.ExtensionContext) {
     extension_uri = context.extensionUri;
     context.subscriptions.push(vscode.window.registerWebviewViewProvider("uscope-view", new UScopeView(context.extensionUri), { webviewOptions: { retainContextWhenHidden: true } }));
+    // NOTE: we do NOT forward configuration changes live — configuration only provides initial defaults.
 }
+
+// (removed) sendSettingsToWebview: initial settings are injected into the HTML to avoid postMessage timing issues
 
 
 // probably called when vscode exists or reloads
@@ -66,7 +69,8 @@ function connect(host: string, port: number, how: string, userInitiated: boolean
     // Receive RTT over GDB,
     // RTT normally only works with SEGGER J-Link devices
     // But we can read memory via gdb, so we implement the RTT protocol and read the data out
-    if(how === "st-gdb" || how === "oc-gdb") {
+    // RTT over GDB (ST-Link / OpenOCD) use the GDB-based reader
+    if(typeof how === 'string' && how.toLowerCase().includes('rtt') && how.toLowerCase().includes('gdb')) {
         proc = cp.spawn("gdb", ['-q', '-nx', "--interpreter=mi"]);
         // successful start of a gdb process counts as a successful connection
         reconnectAttempts = 0;
@@ -280,6 +284,25 @@ function view_update() {
     const uri_js  = view.webview.asWebviewUri(vscode.Uri.joinPath(extension_uri, 'media', 'index.js'));
     const uri_css = view.webview.asWebviewUri(vscode.Uri.joinPath(extension_uri, 'media', 'index.css'));
     let html = fs.readFileSync(vscode.Uri.joinPath(extension_uri, 'media', 'index.html').fsPath).toString();
+    // Build initial settings script so the webview receives defaults immediately on first render
+    try {
+        const conf = vscode.workspace.getConfiguration('uscope');
+        const defaults: any = {
+            'jlinkRtt': { host: conf.get('defaults.jlinkRtt.host', '127.0.0.1'), port: conf.get('defaults.jlinkRtt.port', 19021) },
+            'jlinkSwo': { host: conf.get('defaults.jlinkSwo.host', '127.0.0.1'), port: conf.get('defaults.jlinkSwo.port', 2332) },
+            'jlinkTelnet': { host: conf.get('defaults.jlinkTelnet.host', '127.0.0.1'), port: conf.get('defaults.jlinkTelnet.port', 2333) },
+            'stlinkRttGdb': { host: conf.get('defaults.stlinkRttGdb.host', '127.0.0.1'), port: conf.get('defaults.stlinkRttGdb.port', 61234) },
+            'stlinkSwo': { host: conf.get('defaults.stlinkSwo.host', '127.0.0.1'), port: conf.get('defaults.stlinkSwo.port', 61235) },
+            'openocdRttGdb': { host: conf.get('defaults.openocdRttGdb.host', '127.0.0.1'), port: conf.get('defaults.openocdRttGdb.port', 3333) },
+            'openocdSwo': { host: conf.get('defaults.openocdSwo.host', '127.0.0.1'), port: conf.get('defaults.openocdSwo.port', 3344) }
+        };
+        const filterDefault = conf.get('filter.defaultType', 'simple');
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault })};</script>`;
+        html = html.replace("${uscope_settings}", settingsScript);
+    } catch (e) {
+        html = html.replace("${uscope_settings}", "");
+    }
+
     html = html.replace("${uri_js}", uri_js.toString());
     html = html.replace("${uri_css}", uri_css.toString());
     view.webview.html = html;

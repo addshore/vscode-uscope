@@ -40,6 +40,88 @@
         }
       ]
     }
+    ,
+    "configuration": {
+      "title": "μScope",
+      "properties": {
+        "uscope.filter.defaultType": {
+          "type": "string",
+          "enum": ["simple", "regex"],
+          "default": "simple",
+          "description": "Default filter type used in the console UI"
+        },
+        "uscope.defaults.jlinkRtt.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for SEGGER J-Link RTT"
+        },
+        "uscope.defaults.jlinkRtt.port": {
+          "type": "number",
+          "default": 19021,
+          "description": "Default port for SEGGER J-Link RTT"
+        },
+        "uscope.defaults.jlinkSwo.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for SEGGER J-Link SWO"
+        },
+        "uscope.defaults.jlinkSwo.port": {
+          "type": "number",
+          "default": 2332,
+          "description": "Default port for SEGGER J-Link SWO"
+        },
+        "uscope.defaults.jlinkTelnet.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for SEGGER J-Link Telnet"
+        },
+        "uscope.defaults.jlinkTelnet.port": {
+          "type": "number",
+          "default": 2333,
+          "description": "Default port for SEGGER J-Link Telnet"
+        },
+        "uscope.defaults.stlinkRttGdb.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for ST-Link (RTT over GDB)"
+        },
+        "uscope.defaults.stlinkRttGdb.port": {
+          "type": "number",
+          "default": 61234,
+          "description": "Default port for ST-Link (RTT over GDB)"
+        },
+        "uscope.defaults.stlinkSwo.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for ST-Link SWO"
+        },
+        "uscope.defaults.stlinkSwo.port": {
+          "type": "number",
+          "default": 61235,
+          "description": "Default port for ST-Link SWO"
+        },
+        "uscope.defaults.openocdRttGdb.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for OpenOCD (RTT over GDB)"
+        },
+        "uscope.defaults.openocdRttGdb.port": {
+          "type": "number",
+          "default": 3333,
+          "description": "Default port for OpenOCD (RTT over GDB)"
+        },
+        "uscope.defaults.openocdSwo.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Default host for OpenOCD SWO"
+        },
+        "uscope.defaults.openocdSwo.port": {
+          "type": "number",
+          "default": 3344,
+          "description": "Default port for OpenOCD SWO"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
