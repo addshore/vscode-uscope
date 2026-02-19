@@ -264,44 +264,6 @@ function view_recv(data: any) {
         socket?.write(value);
     }
 
-    // Persist a tab as a savedTab in workspace settings
-    if(data.type === 'saveTab') {
-        try {
-            const conf = vscode.workspace.getConfiguration('uscope');
-            const savedTabs = conf.get<any[]>('savedTabs', []);
-            const incoming = data.tab || {};
-            const incomingKey = data.key || `${incoming.name||''}|${incoming.filter||''}|${incoming.filterType||incoming.filter_type||'simple'}`;
-            const makeKey = (s: any) => `${s.name||''}|${s.filter||''}|${s.filterType||s.filter_type||'simple'}`;
-            let ix = savedTabs.findIndex(s => makeKey(s) === incomingKey);
-            const entry: any = {
-                name: incoming.name || '',
-                filter: incoming.filter || '',
-                filterType: incoming.filterType || incoming.filter_type || 'simple'
-            };
-            if(incoming.highlight !== undefined) entry.highlight = incoming.highlight;
-            if(incoming.highlightType !== undefined) entry.highlightType = incoming.highlightType;
-            if(incoming.highlightForeground !== undefined) entry.highlightForeground = incoming.highlightForeground;
-            if(incoming.highlightBackground !== undefined) entry.highlightBackground = incoming.highlightBackground;
-            if(incoming.filterIds !== undefined) entry.filterIds = incoming.filterIds;
-
-            if(ix >= 0) {
-                // merge with existing entry
-                savedTabs[ix] = Object.assign({}, savedTabs[ix], entry);
-            } else {
-                savedTabs.push(entry);
-            }
-
-            conf.update('savedTabs', savedTabs, vscode.ConfigurationTarget.Workspace).then(() => {
-                // notify webview immediately
-                if(view) view.webview.postMessage({ type: 'savedTabs', savedTabs: savedTabs });
-            }, err => {
-                if(view) view.webview.postMessage({ type: 'error', value: 'Failed to save tab: ' + (err && err.message? err.message : String(err)) });
-            });
-        } catch (e) {
-            if(view) view.webview.postMessage({ type: 'error', value: 'Failed to save tab: ' + String(e) });
-        }
-    }
-
     // user wants to close the socket, so lets do that
     if(data.type === 'disconnect') {
         // mark as manual disconnect so automatic reconnect attempts stop

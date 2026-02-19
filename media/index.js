@@ -29,7 +29,6 @@ const el_save   = document.getElementById("save");
 const el_clear  = document.getElementById("clear");
 const el_follow = document.getElementById("follow");
 const el_filter_type = document.getElementById("filter_type");
-const el_save_tab = document.getElementById("save_tab");
 
 // The vscode api for sending messages to 'extension.ts'
 const vscode = acquireVsCodeApi();
@@ -859,25 +858,7 @@ el_save.addEventListener("click", ev => {
     msg_send({ type: 'save', value: cfg.lines });
 });
 
-// Save current tab to workspace savedTabs (create or update)
-if(el_save_tab) el_save_tab.addEventListener('click', ev => {
-    const t = cfg.tab;
-    const payload = {
-        type: 'saveTab',
-        key: t.key || `${t.name||''}|${t.filter_text||''}|${t.filter_type||'simple'}`,
-        tab: {
-            name: t.name || '',
-            filter: t.filter_text || '',
-            filterType: t.filter_type || 'simple',
-            highlight: t.highlight_text || '',
-            highlightType: t.highlight_type || 'simple',
-            highlightForeground: t.highlight_fg || settingsDefaultHighlightForeground,
-            highlightBackground: t.highlight_bg || settingsDefaultHighlightBackground,
-            filterIds: t.highlight_refs || []
-        }
-    };
-    msg_send(payload);
-});
+
 
 // if the filter type changed, recompile the filter and update the output console.
 el_filter_type.addEventListener("change", ev => { cfg.tab.filter_type = el_filter_type.value; change_filter(); });
