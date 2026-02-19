@@ -9,19 +9,44 @@ Disable or disconnect other external RTT viewers such as the RTT console in Cort
 
 ![](doc/screenshot.png)
 
-## Developing
-To compile and test this extension open this directory in vscode. Install Node.js, then run `npm install` and `npm run compile`.
-Then you should just be able to run with `F5`.
+## Development
 
-## Packaging
-Run the following commands to create a `.vsix` file:
+These steps get you a live development workflow where you can rebuild and run the extension in the Extension Development Host.
+
+1. Open this repository folder in VS Code.
+2. Install dependencies:
 
 ```bash
 npm install
-vsce package
 ```
 
-The file can be loaded into vscode by going to `extensions` -> `...` (top right) -> `Install from VSIX`. Then select the file you just built.
+3. Build once or run the TypeScript watcher while developing:
+
+```bash
+npm run compile      # one-off build
+npm run watch        # keep rebuilding as you edit
+```
+
+4. Launch the Extension Development Host:
+
+- Press F5 (Run → Start Debugging). A new VS Code window titled "Extension Development Host" will open.
+- Make sure you generally have any other μScope extensions installs disabled to avoid conflicts.
+- In that host window open the Command Palette (Ctrl+Shift+P / Cmd+Shift+P) and run "View: Show View" → select the `uScope` view (or find it in the Panel area).
+
+5. Use the μScope panel to connect and test. To view runtime logs and errors from the webview, open Help → Toggle Developer Tools in the Extension Development Host.
+
+## Packaging / Release
+
+To create a distributable VSIX package for publishing or manual install:
+
+```bash
+npm install
+npx vsce package
+```
+
+This creates a `.vsix` file which you can install in VS Code via Extensions → ... → "Install from VSIX..." or publish to the Marketplace.
+
+You can also right click the `.vsix` file and select "Install from VSIX" directly.
 
 # LICENSE
 This project is licensed under the MIT license, see [LICENSE.txt](LICENSE.txt) for more info.
