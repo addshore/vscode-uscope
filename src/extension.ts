@@ -38,7 +38,15 @@ let lastHow: string | null = null;
 export function activate(context: vscode.ExtensionContext) {
     extension_uri = context.extensionUri;
     context.subscriptions.push(vscode.window.registerWebviewViewProvider("uscope-view", new UScopeView(context.extensionUri), { webviewOptions: { retainContextWhenHidden: true } }));
-    // NOTE: we do NOT forward configuration changes live — configuration only provides initial defaults.
+    // Forward savedTabs configuration changes live so the webview can add/remove saved tabs immediately.
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+        if(!view) return;
+        if(e.affectsConfiguration('uscope.savedTabs')) {
+            const conf = vscode.workspace.getConfiguration('uscope');
+            const savedTabs = conf.get('savedTabs', []);
+            view.webview.postMessage({ type: 'savedTabs', savedTabs: savedTabs });
+        }
+    }));
 }
 
 // (removed) sendSettingsToWebview: initial settings are injected into the HTML to avoid postMessage timing issues
@@ -297,7 +305,8 @@ function view_update() {
             'openocdSwo': { host: conf.get('defaults.openocdSwo.host', '127.0.0.1'), port: conf.get('defaults.openocdSwo.port', 3344) }
         };
         const filterDefault = conf.get('filter.defaultType', 'simple');
-        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault })};</script>`;
+        const savedTabs = conf.get('savedTabs', []);
+        const settingsScript = `<script>window.__uscopeDefaults = ${JSON.stringify({ defaults: defaults, filterDefault: filterDefault, savedTabs: savedTabs })};</script>`;
         html = html.replace("${uscope_settings}", settingsScript);
     } catch (e) {
         html = html.replace("${uscope_settings}", "");

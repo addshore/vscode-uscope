@@ -88,12 +88,46 @@ if(window.__uscopeDefaults) {
     // Do not treat this as a live update — these are initial defaults only
 }
 
-// lets create the first tab
-create_new_tab();
+// helper to create a unique key for a tab spec
+function tabKey(spec) {
+    const name = spec.name || "";
+    const filter = spec.filter || "";
+    const type = spec.filterType || spec.filter_type || "simple";
+    return `${name}|${filter}|${type}`;
+}
+
+// Close a tab (used by close buttons)
+function closeTab(tab) {
+    const ix = cfg.tab_list.indexOf(tab);
+    if(ix < 0) return;
+    cfg.tab_list.splice(ix, 1);
+    try { el_tabbar.removeChild(tab.el); } catch {}
+    if(tab === cfg.tab) {
+        if(cfg.tab_list.length > 0) {
+            let j = ix;
+            if(j >= cfg.tab_list.length) j = cfg.tab_list.length-1;
+            switch_tab(cfg.tab_list[j]);
+        } else {
+            create_new_tab();
+        }
+    }
+}
+
+// lets create the initial tabs: saved tabs if provided, otherwise a single empty tab
+if(window.__uscopeDefaults && Array.isArray(window.__uscopeDefaults.savedTabs) && window.__uscopeDefaults.savedTabs.length > 0) {
+    // respect array order as provided by the workspace settings
+    const saved = window.__uscopeDefaults.savedTabs.slice();
+    for(let i=0;i<saved.length;i++) {
+        const s = saved[i];
+        create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: tabKey(s) });
+    }
+} else {
+    create_new_tab();
+}
 
 // Create a new tab and add it tot the tab-bar
 // The new tab is then focused
-function create_new_tab() {
+function create_new_tab(spec) {
     // create the HTML elements for the tab button
     // NOTE: classList is not actually a JavaScript list, but a space separated string
     // span: inline, div: display: block
@@ -104,10 +138,8 @@ function create_new_tab() {
     const el_txt = document.createElement("span");
     // el_txt.classList = "";
 
-    // close button, closes the tab
-    const el_close = document.createElement("a");
-    el_close.classList = "icon";
-    el_close.innerHTML = "x";
+    // close button, closes the tab. For saved tabs we do not create a close button.
+    let el_close = null;
 
 
     // create a object containing information on the current tab, it is inserted in tab list but can also
@@ -116,9 +148,12 @@ function create_new_tab() {
         el: el,
         el_txt: el_txt,
         follow: true, // scroll output automatically
-        filter_text: "",
+        filter_text: spec && spec.filter_text ? spec.filter_text : "",
         filter_regex: null, // can be null if the text is an invalid regex
-        filter_type: 'simple'
+        filter_type: spec && spec.filter_type ? spec.filter_type : (spec && spec.filterType ? spec.filterType : 'simple'),
+        name: spec && spec.name ? spec.name : null,
+        saved: spec && spec.saved ? true : false,
+        key: spec && spec.key ? spec.key : null,
     };
 
     // clicking the 'x' in the tab should close the tab, and switch to a different tab if needed
@@ -151,23 +186,147 @@ function create_new_tab() {
     // clicking anything but the close button should switch to the tab
     el.addEventListener("click",     ev => switch_tab(tab));
     el_txt.addEventListener("click", ev => switch_tab(tab));
-    
-    // clicking the 'x' closes the tab
-    el_close.addEventListener("click", ev => do_close());
 
-    // middle mouse button also closes the tab
-    el.addEventListener("auxclick",       ev => { if(ev.button === 1) do_close(); });
-    el_txt.addEventListener("auxclick",   ev => { if(ev.button === 1) do_close(); });
-    el_close.addEventListener("auxclick", ev => { if(ev.button === 1) do_close(); });
+    // create and wire the close button only for non-saved (session) tabs
+    function addClose() {
+        if(el_close) return;
+        el_close = document.createElement("a");
+        el_close.classList = "icon";
+        el_close.innerHTML = "x";
+        el_close.addEventListener("click", ev => do_close());
+        el_close.addEventListener("auxclick", ev => { if(ev.button === 1) do_close(); });
+        el.appendChild(el_close);
+        tab.el_close = el_close;
+    }
 
-    // insert before, because the '+' should stay at the end
+    function removeClose() {
+        if(!el_close) return;
+        try { el.removeChild(el_close); } catch {}
+        el_close = null;
+        tab.el_close = null;
+    }
+
+    // middle mouse button also closes the tab (on the tab itself)
+    el.addEventListener("auxclick", ev => { if(ev.button === 1) do_close(); });
+    el_txt.addEventListener("auxclick", ev => { if(ev.button === 1) do_close(); });
+
+    // insert before the first session tab (so saved tabs stay left-most) or before the '+' if none
     el.appendChild(el_txt);
-    el.appendChild(el_close);
-    el_tabbar.insertBefore(el, el_tab_plus);
+    if(!tab.saved) {
+        el_close = document.createElement("a");
+        el_close.classList = "icon";
+        el_close.innerHTML = "x";
+        el_close.addEventListener("click", ev => do_close());
+        el_close.addEventListener("auxclick", ev => { if(ev.button === 1) do_close(); });
+        el.appendChild(el_close);
+        tab.el_close = el_close;
+    }
 
+    // determine insertion index in cfg.tab_list: before first non-saved tab (i.e. keep saved tabs left)
+    let insertIndex = cfg.tab_list.length;
+    for(let i = 0; i < cfg.tab_list.length; i++) {
+        if(!cfg.tab_list[i].saved) { insertIndex = i; break; }
+    }
+
+    // find reference node in DOM to insert before
+    let refNode = el_tab_plus;
+    if(insertIndex < cfg.tab_list.length) refNode = cfg.tab_list[insertIndex].el;
+    el_tabbar.insertBefore(el, refNode);
+
+    // insert into cfg.tab_list at correct position
+    cfg.tab_list.splice(insertIndex, 0, tab);
+
+    // style saved tabs slightly differently
+    if(tab.saved) el.classList.add('saved');
+
+    // set visible text
+    if(tab.name && tab.name !== "") tab.el_txt.innerText = tab.name;
+    else if(tab.filter_text === "") tab.el_txt.innerHTML = "<i>No filter</i>";
+    else tab.el_txt.innerText = tab.filter_text;
     // switch to the new tab
-    cfg.tab_list.push(tab);
     switch_tab(tab);
+}
+
+// Reorder tabs so saved tabs appear first in the order provided by savedKeys, then session tabs in existing order
+function reorderTabs(savedKeys) {
+    // build maps
+    const savedKeysArr = Array.isArray(savedKeys) ? savedKeys.slice() : [];
+    const existing = cfg.tab_list.slice();
+
+    const newList = [];
+    // add saved tabs in the order of savedKeys
+    for(const key of savedKeysArr) {
+        const t = existing.find(x => x.key === key);
+        if(t) newList.push(t);
+    }
+    // append any remaining saved tabs that weren't matched
+    for(const t of existing) {
+        if(t.saved && newList.indexOf(t) === -1) newList.push(t);
+    }
+    // append session tabs in their existing relative order
+    for(const t of existing) {
+        if(!t.saved) newList.push(t);
+    }
+
+    // rebuild DOM order
+    for(const t of existing) {
+        try { el_tabbar.removeChild(t.el); } catch {}
+    }
+    for(const t of newList) {
+        el_tabbar.insertBefore(t.el, el_tab_plus);
+    }
+
+    cfg.tab_list = newList;
+}
+
+// expose helpers for saved tab updates
+window.__uscope_applySavedTabs = applySavedTabs;
+
+// Apply saved tabs updates from the extension: add missing saved tabs, mark removed ones as session tabs
+function applySavedTabs(savedArray) {
+    if(!Array.isArray(savedArray)) return;
+    const saved = savedArray.slice();
+    const newKeys = saved.map(s => tabKey(s));
+
+    // mark existing saved tabs not in newKeys as not-saved (make them session tabs and add close button)
+    for(const t of cfg.tab_list) {
+        if(t.saved && (!t.key || newKeys.indexOf(t.key) === -1)) {
+            t.saved = false;
+            t.el.classList.remove('saved');
+            // add a close button if missing
+            if(!t.el_close) {
+                const close = document.createElement('a');
+                close.classList = 'icon';
+                close.innerHTML = 'x';
+                close.addEventListener('click', ev => closeTab(t));
+                close.addEventListener('auxclick', ev => { if(ev.button === 1) closeTab(t); });
+                t.el.appendChild(close);
+                t.el_close = close;
+            }
+        }
+    }
+
+    // add any new saved tabs not already present
+    for(let i=0;i<saved.length;i++) {
+        const s = saved[i];
+        const key = tabKey(s);
+        const exists = cfg.tab_list.find(t => t.key === key);
+        if(!exists) {
+            // insert at the correct position based on order: insert before the i-th saved tab element or before +
+            create_new_tab({ filter_text: s.filter || "", filter_type: s.filterType || s.filter_type || 'simple', name: s.name || '', saved: true, key: key });
+        } else {
+            // ensure it's marked saved
+            exists.saved = true;
+            exists.el.classList.add('saved');
+            // remove close button if present
+            if(exists.el_close) {
+                try { exists.el.removeChild(exists.el_close); } catch {}
+                exists.el_close = null;
+            }
+        }
+    }
+    // finally reorder tabs so saved ones are left-most in the order of saved array
+    reorderTabs(newKeys);
 }
 
 // compare the line to the current active filter
@@ -361,6 +520,12 @@ window.addEventListener('message', event => {
         return;
     }
 
+    // saved tabs update from the extension
+    if(data.type === 'savedTabs') {
+        applySavedTabs(data.savedTabs || []);
+        return;
+    }
+
     switch(data.type) {
         case 'connect':
             on_connect();
@@ -426,11 +591,16 @@ function change_filter() {
     // just scroll to bottom, probably good default behavior
     cfg.tab.follow = true;
 
-    // update tab text, but put something else in place for an empty filter, as that would be confusing.
-    if(filter === "") {
-        cfg.tab.el_txt.innerHTML = "<i>No filter</i>";
+    // update tab text, but only use the filter as the tab label when the tab has no explicit name.
+    if(cfg.tab.name && cfg.tab.name !== "") {
+        // keep the name as the tab label
+        cfg.tab.el_txt.innerText = cfg.tab.name;
     } else {
-        cfg.tab.el_txt.innerText = filter;
+        if(filter === "") {
+            cfg.tab.el_txt.innerHTML = "<i>No filter</i>";
+        } else {
+            cfg.tab.el_txt.innerText = filter;
+        }
     }
 
     // filter changed -> need a full redraw

@@ -9,6 +9,26 @@ Disable or disconnect other external RTT viewers such as the RTT console in Cort
 
 ![](doc/screenshot.png)
 
+## Preferences
+
+### Saved filter tabs
+
+You can predefine filter tabs for a workspace so they appear automatically when the project is opened in VS Code.
+Add the `uscope.savedTabs` array to your Workspace settings (Preferences → Settings → Workspace) or directly in the workspace settings JSON.
+
+Example:
+
+```json
+"uscope.savedTabs": [
+	{ "filter": "CH0", "name": "CH0." },
+	{ "filter": "CH1", "name": "CH1." },
+	{ "filter": "CH\\d+", "name": "CH*", "filterType": "regex" }
+]
+```
+
+Saved tabs show as left-most tabs in μScope and are not closable from the UI. 
+f you remove a saved tab from the workspace settings it will transition to a session tab (closable) in the open view.
+
 ## Development
 
 These steps get you a live development workflow where you can rebuild and run the extension in the Extension Development Host.

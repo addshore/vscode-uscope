@@ -120,6 +120,21 @@
           "default": 3344,
           "description": "Default port for OpenOCD SWO"
         }
+        ,
+        "uscope.savedTabs": {
+          "type": "array",
+          "description": "Saved filter tabs for the workspace. These are shown as tabs in μScope on project open.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "description": "Optional stable id for the saved tab" },
+              "name": { "type": "string", "description": "Optional display name for the tab" },
+              "filter": { "type": "string", "description": "Filter string for the tab" },
+              "filterType": { "type": "string", "enum": ["simple", "regex"], "default": "simple" }
+            }
+          },
+          "default": []
+        }
       }
     }
   },
