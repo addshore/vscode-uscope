@@ -61,6 +61,7 @@ Example:
 		}
 	]
 }
+```
 
 You can also reference highlights from saved tabs specifically, rather than using `always`.
 
