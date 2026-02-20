@@ -1,5 +1,9 @@
 # μScope for Visual Studio Code
 
+Store Link: https://marketplace.visualstudio.com/items?itemName=addshore.uscope-reborn
+
+Fork of https://github.com/DEMCON/uscope - https://marketplace.visualstudio.com/items?itemName=DEMCON.uscope
+
 ## Usage
 Start the SEGGER J-Link gdb server, if not running already.
 Put some code on the microcontroller that prints via SEGGER RTT.
