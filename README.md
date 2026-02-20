@@ -36,10 +36,11 @@ You can also choose which connection type is initially shown and whether μScope
 
 These settings will be used as the initial values shown when μScope is opened for that project, and can be changed once the project is open.
 
-### Saved filter tabs
+### Saved tab settings
 
 You can predefine filter tabs for a workspace so they appear automatically when the project is opened in VS Code.
 Add the `uscope.savedTabs` array to your Workspace settings (Preferences → Settings → Workspace) or directly in the workspace settings JSON.
+You can also save tab or global highlights.
 
 Example:
 
@@ -48,7 +49,7 @@ Example:
 	"uscope.savedTabs": [
 		{ "filter": "CH0", "name": "CH0." },
 		{ "filter": "CH1", "name": "CH1." },
-		{ "filter": "CH\\d+", "name": "CH*" }
+		{ "filter": "CH\\d+", "filterType":"regex", "name": "CH*" }
 	],
 	"uscope.highlights": [
 		{
@@ -62,6 +63,22 @@ Example:
 	]
 }
 ```
+
+### Filters
+
+You might want to use inverse regex matching to exclude entires with some content.
+For example having a verbose and non verbose tab...
+
+```json
+{
+	"uscope.savedTabs": [
+		{ "filter": "Verbose", "name": "Verbose" },
+		{ "filter": "^((?!Verbose)[\\s\\S])*$", "filterType":"regex",  "name": "-Verbose" }
+	]
+}
+```
+
+### Highlights
 
 You can also reference highlights from saved tabs specifically, rather than using `always`.
 
